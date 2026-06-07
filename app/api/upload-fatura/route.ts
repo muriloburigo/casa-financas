@@ -6,8 +6,9 @@ import { expenseEntries, creditCardTransactions } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { EXPENSE_CATEGORIES } from "@/lib/utils";
+import { extractText } from "unpdf";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const invoiceSchema = z.object({
   totalAmount: z.number().describe("Valor total da fatura em reais"),
@@ -47,50 +48,34 @@ export async function POST(req: Request) {
 
   const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
 
-  let result;
+  let textContent: string;
 
   if (isPdf) {
-    // PDF → Buffer → Claude com suporte nativo a documentos PDF
+    // Extrai texto do PDF com pdf-parse (funciona com PDFs digitais como Nubank)
     const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const { text } = await extractText(new Uint8Array(arrayBuffer), { mergePages: true });
+    textContent = Array.isArray(text) ? text.join("\n") : text;
 
-    result = await generateObject({
-      model: anthropic("claude-sonnet-4-6"),
-      schema: invoiceSchema,
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "file",
-              data: buffer,
-              mimeType: "application/pdf",
-              filename: file.name,
-            },
-            {
-              type: "text",
-              text: `${SYSTEM_PROMPT(cardName)}\n\nExtraia todas as transações desta fatura PDF do ${cardName}.`,
-            },
-          ],
-        },
-      ],
-    });
+    if (!textContent || textContent.trim().length < 50) {
+      return Response.json(
+        { error: "Não foi possível extrair texto do PDF. Tente subir o CSV da fatura." },
+        { status: 422 }
+      );
+    }
   } else {
-    // CSV / texto simples
-    const text = await file.text();
-    result = await generateObject({
-      model: anthropic("claude-sonnet-4-6"),
-      schema: invoiceSchema,
-      messages: [
-        {
-          role: "user",
-          content: `${SYSTEM_PROMPT(cardName)}\n\nFatura (CSV/texto):\n${text.slice(0, 12000)}`,
-        },
-      ],
-    });
+    textContent = await file.text();
   }
 
-  const { object } = result;
+  const { object } = await generateObject({
+    model: anthropic("claude-sonnet-4-6"),
+    schema: invoiceSchema,
+    messages: [
+      {
+        role: "user",
+        content: `${SYSTEM_PROMPT(cardName)}\n\nTexto extraído da fatura:\n\n${textContent.slice(0, 15000)}`,
+      },
+    ],
+  });
 
   // Encontra o lançamento existente deste cartão neste mês, ou cria um novo
   const existing = await db
@@ -108,18 +93,15 @@ export async function POST(req: Request) {
   let expEntryId: string;
 
   if (existing.length > 0) {
-    // Atualiza o lançamento existente com o valor real da fatura
     await db
       .update(expenseEntries)
       .set({ amount: object.totalAmount.toString(), status: "paid" })
       .where(eq(expenseEntries.id, existing[0].id));
     expEntryId = existing[0].id;
-    // Remove transações antigas desta fatura antes de inserir as novas
     await db
       .delete(creditCardTransactions)
       .where(eq(creditCardTransactions.expenseEntryId, expEntryId));
   } else {
-    // Cria entrada nova se não existir
     const [newEntry] = await db
       .insert(expenseEntries)
       .values({
@@ -135,7 +117,6 @@ export async function POST(req: Request) {
     expEntryId = newEntry.id;
   }
 
-  // Salva transações individuais
   if (object.transactions.length > 0) {
     await db.insert(creditCardTransactions).values(
       object.transactions.map((t) => ({
