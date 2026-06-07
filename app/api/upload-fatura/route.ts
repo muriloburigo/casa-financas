@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     textContent = cleanText(await file.text());
   }
 
-  return Response.json({ extracted: textContent.slice(0, 8000), charCount: textContent.length });
+  return Response.json({ extracted: textContent, charCount: textContent.length });
 }
 
 // PUT /api/upload-fatura — Etapa 2: analisa texto com IA e salva
@@ -100,7 +100,7 @@ export async function PUT(req: Request) {
     const result = await generateObject({
       model: anthropic("claude-sonnet-4-6"),
       schema: invoiceSchema,
-      maxTokens: 4096,
+      maxTokens: 8192,
       messages: [
         {
           role: "user",
@@ -113,7 +113,7 @@ export async function PUT(req: Request) {
             `3. optimizationSummary: 1-2 frases`,
             ``,
             `FATURA:`,
-            text,
+            text.slice(0, 30000),
           ].join("\n"),
         },
       ],
