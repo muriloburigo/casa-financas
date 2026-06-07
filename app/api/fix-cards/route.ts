@@ -27,10 +27,11 @@ export async function POST(req: Request) {
   }
 
   // 2. Dados dos três cartões por mês (da planilha original)
+  // Nubank Ma: meses 6-12 usam R$ 926 (média dos meses 1-5 com valor)
   const cards = [
     {
       name: "Nubank Ma",
-      amounts: [606.56, 1957.25, 1330.58, 487.33, 248.49, 0, 0, 0, 0, 0, 0, 0],
+      amounts: [606.56, 1957.25, 1330.58, 487.33, 248.49, 926, 926, 926, 926, 926, 926, 926],
     },
     {
       name: "Nubank Mu",
