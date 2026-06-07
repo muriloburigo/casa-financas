@@ -8,12 +8,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const { status, type } = await req.json();
+  const body = await req.json();
+  const { type, status, amount } = body;
+
+  const patch: Record<string, unknown> = {};
+  if (status !== undefined) patch.status = status;
+  if (amount !== undefined) patch.amount = String(amount);
 
   if (type === "income") {
-    await db.update(incomeEntries).set({ status }).where(eq(incomeEntries.id, id));
+    await db.update(incomeEntries).set(patch).where(eq(incomeEntries.id, id));
   } else {
-    await db.update(expenseEntries).set({ status }).where(eq(expenseEntries.id, id));
+    await db.update(expenseEntries).set(patch).where(eq(expenseEntries.id, id));
   }
 
   return Response.json({ success: true });

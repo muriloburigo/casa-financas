@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONTHS } from "@/lib/utils";
-import { CheckCircle2, Clock, Trash2 } from "lucide-react";
+import { CheckCircle2, Clock, Trash2, Pencil } from "lucide-react";
 
 interface Entry {
   id: string;
@@ -17,6 +17,51 @@ interface Entry {
 }
 
 type Tab = "expenses" | "incomes";
+
+function AmountCell({ entry, type, onSave }: {
+  entry: Entry;
+  type: "income" | "expense";
+  onSave: (id: string, amount: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(parseFloat(entry.amount).toFixed(2).replace(".", ","));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select();
+  }, [editing]);
+
+  function commit() {
+    const num = parseFloat(value.replace(",", "."));
+    if (!isNaN(num) && num > 0) onSave(entry.id, num);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
+        className="w-28 text-right text-sm font-semibold text-zinc-800 bg-zinc-50 border border-emerald-400 rounded px-2 py-0.5 tabular-nums focus:outline-none"
+        autoFocus
+      />
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditing(true)}
+      title="Clique para editar o valor"
+      className="group/val flex items-center gap-1 tabular-nums text-sm font-semibold text-zinc-800 hover:text-emerald-600 transition-colors"
+    >
+      {formatCurrency(entry.amount)}
+      <Pencil className="h-3 w-3 opacity-0 group-hover/val:opacity-40 transition-opacity" />
+    </button>
+  );
+}
 
 export default function TransacoesPage() {
   const [expenses, setExpenses] = useState<Entry[]>([]);
@@ -36,29 +81,33 @@ export default function TransacoesPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const currentType = tab === "incomes" ? "income" : "expense";
+
   async function toggleStatus(entry: Entry) {
     const next = entry.status === "paid" ? "estimated" : "paid";
-    const type = tab === "incomes" ? "income" : "expense";
-
-    // Optimistic update
     const setter = tab === "incomes" ? setIncomes : setExpenses;
     setter((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: next } : e));
-
     await fetch(`/api/transacoes/${entry.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: next, type }),
+      body: JSON.stringify({ status: next, type: currentType }),
+    });
+  }
+
+  async function updateAmount(id: string, amount: number) {
+    const setter = tab === "incomes" ? setIncomes : setExpenses;
+    setter((prev) => prev.map((e) => e.id === id ? { ...e, amount: amount.toString() } : e));
+    await fetch(`/api/transacoes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount, type: currentType }),
     });
   }
 
   async function remove(entry: Entry) {
-    const type = tab === "incomes" ? "income" : "expense";
-
-    // Optimistic update
     const setter = tab === "incomes" ? setIncomes : setExpenses;
     setter((prev) => prev.filter((e) => e.id !== entry.id));
-
-    await fetch(`/api/transacoes/${entry.id}?type=${type}`, { method: "DELETE" });
+    await fetch(`/api/transacoes/${entry.id}?type=${currentType}`, { method: "DELETE" });
   }
 
   const entries = tab === "expenses" ? expenses : incomes;
@@ -130,19 +179,19 @@ export default function TransacoesPage() {
             )}
             {entries.map((entry) => (
               <div key={entry.id} className="flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 group transition-colors">
-                {/* Toggle status — clique no ícone */}
+
+                {/* Toggle status */}
                 <button
                   onClick={() => toggleStatus(entry)}
                   title={entry.status === "paid" ? "Marcar como estimado" : "Marcar como pago"}
                   className="shrink-0 transition-transform hover:scale-110"
                 >
-                  {entry.status === "paid" ? (
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                  ) : (
-                    <Clock className="h-5 w-5 text-zinc-300 hover:text-zinc-400" />
-                  )}
+                  {entry.status === "paid"
+                    ? <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    : <Clock className="h-5 w-5 text-zinc-300 hover:text-zinc-400" />}
                 </button>
 
+                {/* Descrição */}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-zinc-800 truncate">{entry.description}</p>
                   {entry.isCreditCard && entry.creditCardName && (
@@ -150,11 +199,10 @@ export default function TransacoesPage() {
                   )}
                 </div>
 
-                <span className="text-sm font-semibold text-zinc-800 tabular-nums shrink-0">
-                  {formatCurrency(entry.amount)}
-                </span>
+                {/* Valor editável inline */}
+                <AmountCell entry={entry} type={currentType} onSave={updateAmount} />
 
-                {/* Remover — visível apenas no hover */}
+                {/* Remover — aparece no hover */}
                 <button
                   onClick={() => remove(entry)}
                   title="Remover"
@@ -167,6 +215,10 @@ export default function TransacoesPage() {
           </div>
         </CardContent>
       </Card>
+
+      <p className="text-xs text-zinc-400 text-center">
+        Clique em ✓/🕐 para alternar status · Clique no valor para editar · Passe o mouse para remover
+      </p>
     </div>
   );
 }

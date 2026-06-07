@@ -104,7 +104,7 @@ export default function FaturasPage() {
               </div>
               <div>
                 <label className="text-sm font-medium text-zinc-700 mb-1 block">Arquivo (CSV)</label>
-                <input ref={fileRef} type="file" accept=".csv,.txt,.pdf" className="w-full text-sm text-zinc-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" required />
+                <input ref={fileRef} type="file" accept=".pdf,.csv,.txt,application/pdf,text/csv,text/plain" className="w-full text-sm text-zinc-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100" required />
               </div>
             </div>
             <Button type="submit" disabled={loading} className="w-full sm:w-auto">
