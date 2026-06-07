@@ -25,6 +25,17 @@ interface UploadResult {
 }
 
 type Step = "form" | "extracted" | "done";
+type Mode = "pdf" | "text";
+
+interface ExtractedFile {
+  mode: Mode;
+  preview: string;
+  base64?: string;
+  mimeType?: string;
+  fullText?: string;
+  size: number;
+  name: string;
+}
 
 export default function FaturasPage() {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -33,15 +44,14 @@ export default function FaturasPage() {
   const [year] = useState(2026);
 
   const [step, setStep] = useState<Step>("form");
-  const [extractedText, setExtractedText] = useState("");
-  const [charCount, setCharCount] = useState(0);
+  const [extracted, setExtracted] = useState<ExtractedFile | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [error, setError] = useState("");
 
-  // Etapa 1 — extrai texto do PDF
+  // Etapa 1 — lê o arquivo e prepara para análise
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
@@ -49,7 +59,7 @@ export default function FaturasPage() {
 
     setLoading(true);
     setError("");
-    setExtractedText("");
+    setExtracted(null);
     setResult(null);
 
     const formData = new FormData();
@@ -58,15 +68,14 @@ export default function FaturasPage() {
     try {
       const res = await fetch("/api/upload-fatura", { method: "POST", body: formData });
       const data = await res.json();
-      if (data.extracted) {
-        setExtractedText(data.extracted);
-        setCharCount(data.charCount ?? data.extracted.length);
+      if (data.preview !== undefined) {
+        setExtracted(data as ExtractedFile);
         setStep("extracted");
       } else {
-        setError(data.error ?? "Erro ao extrair texto do arquivo");
+        setError(data.error ?? "Erro ao ler o arquivo");
       }
     } catch {
-      setError("Erro de conexão ao extrair o arquivo");
+      setError("Erro de conexão ao ler o arquivo");
     } finally {
       setLoading(false);
     }
@@ -74,6 +83,7 @@ export default function FaturasPage() {
 
   // Etapa 2 — analisa com IA
   async function handleAnalyze() {
+    if (!extracted) return;
     setAnalyzing(true);
     setError("");
 
@@ -81,7 +91,15 @@ export default function FaturasPage() {
       const res = await fetch("/api/upload-fatura", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: extractedText, cardName, month, year }),
+        body: JSON.stringify({
+          mode: extracted.mode,
+          base64: extracted.base64,
+          mimeType: extracted.mimeType,
+          fullText: extracted.fullText,
+          cardName,
+          month,
+          year,
+        }),
       });
       const data = await res.json();
       if (data.success) {
@@ -99,7 +117,7 @@ export default function FaturasPage() {
 
   function reset() {
     setStep("form");
-    setExtractedText("");
+    setExtracted(null);
     setResult(null);
     setError("");
     if (fileRef.current) fileRef.current.value = "";
@@ -177,24 +195,30 @@ export default function FaturasPage() {
       )}
 
       {/* Etapa 2 — prévia do texto extraído */}
-      {step === "extracted" && (
+      {step === "extracted" && extracted && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Texto extraído com sucesso
+                Arquivo pronto para análise
               </CardTitle>
               <p className="text-xs text-zinc-400 mt-1">
-                {charCount.toLocaleString()} caracteres · {cardName} · {MONTHS[month - 1]} {year}
+                {extracted.name} · {(extracted.size / 1024).toFixed(0)} KB · {cardName} · {MONTHS[month - 1]} {year}
               </p>
             </div>
             <Button variant="outline" size="sm" onClick={reset}>Trocar arquivo</Button>
           </CardHeader>
           <CardContent className="space-y-4">
-            <pre className="text-xs text-zinc-600 bg-zinc-50 rounded-lg p-4 max-h-48 overflow-auto whitespace-pre-wrap border border-zinc-200">
-              {extractedText.slice(0, 1200)}{extractedText.length > 1200 ? "\n…(truncado para prévia)" : ""}
-            </pre>
+            <div className="flex items-center gap-3 p-4 bg-zinc-50 rounded-lg border border-zinc-200">
+              <FileText className="h-8 w-8 text-zinc-400 shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-zinc-700">{extracted.name}</p>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  {extracted.mode === "pdf" ? "PDF — Claude vai ler o documento diretamente" : "CSV/Texto — conteúdo extraído"}
+                </p>
+              </div>
+            </div>
             <div className="flex gap-2">
               <Button onClick={handleAnalyze} disabled={analyzing} className="flex-1 sm:flex-none">
                 {analyzing ? (

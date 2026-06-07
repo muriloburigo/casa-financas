@@ -14,6 +14,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^0.0.56",
     "@ai-sdk/react": "^0.0.70",
+    "@anthropic-ai/sdk": "^0.102.0",
     "@auth/core": "^0.41.2",
     "@auth/drizzle-adapter": "^1.11.2",
     "@hookform/resolvers": "^5.4.0",
