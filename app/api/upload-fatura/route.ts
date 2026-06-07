@@ -7,6 +7,34 @@ import { EXPENSE_CATEGORIES } from "@/lib/utils";
 
 export const maxDuration = 120;
 
+// GET — lista faturas de cartão que têm transações detalhadas
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const year = parseInt(searchParams.get("year") ?? "2026");
+
+  const entries = await db
+    .select()
+    .from(expenseEntries)
+    .where(and(eq(expenseEntries.isCreditCard, true), eq(expenseEntries.year, year)))
+    .orderBy(expenseEntries.month);
+
+  // Para cada entrada, conta as transações
+  const result = await Promise.all(
+    entries.map(async (e) => {
+      const txs = await db
+        .select()
+        .from(creditCardTransactions)
+        .where(eq(creditCardTransactions.expenseEntryId, e.id));
+      return { ...e, transactionCount: txs.length, hasDetail: txs.length > 0 };
+    })
+  );
+
+  return Response.json({ invoices: result });
+}
+
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Converte "DD/MM" ou "DD/MM/YYYY" → "YYYY-MM-DD" (ou null se inválido)

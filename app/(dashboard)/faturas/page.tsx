@@ -1,30 +1,50 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, MONTHS, EXPENSE_CATEGORIES } from "@/lib/utils";
-import { Upload, FileText, AlertTriangle, CheckCircle2, Sparkles, ChevronRight } from "lucide-react";
+import { formatCurrency, MONTHS } from "@/lib/utils";
+import {
+  Upload, FileText, AlertTriangle, CheckCircle2, Sparkles,
+  ChevronRight, CreditCard, ChevronDown,
+} from "lucide-react";
 
 interface Transaction {
+  id: string;
   description: string;
-  amount: number;
-  date?: string;
-  category: string;
+  amount: string;
+  transactionDate: string | null;
+  aiCategory: string | null;
   isOptimizable: boolean;
-  notes?: string;
+  aiNotes: string | null;
 }
 
-interface UploadResult {
-  success: boolean;
+interface Invoice {
+  id: string;
+  creditCardName: string;
+  month: number;
+  year: number;
+  amount: string;
+  status: string;
+  transactionCount: number;
+  hasDetail: boolean;
+}
+
+interface AnalysisResult {
   totalAmount: number;
   transactionCount: number;
   optimizationSummary: string;
-  transactions: Transaction[];
+  transactions: Array<{
+    description: string;
+    amount: number;
+    category: string;
+    isOptimizable: boolean;
+    notes?: string;
+  }>;
 }
 
-type Step = "form" | "extracted" | "done";
+type Step = "form" | "ready" | "done";
 type Mode = "pdf" | "text";
 
 interface ExtractedFile {
@@ -37,6 +57,73 @@ interface ExtractedFile {
   name: string;
 }
 
+// Detalhe de uma fatura salva, agrupado por categoria
+function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
+  const [transactions, setTransactions] = useState<Transaction[] | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/faturas/${invoiceId}`)
+      .then((r) => r.json())
+      .then((d) => setTransactions(d.transactions ?? []))
+      .finally(() => setLoading(false));
+  }, [invoiceId]);
+
+  if (loading) return <p className="text-xs text-zinc-400 px-5 py-3">Carregando...</p>;
+  if (!transactions || transactions.length === 0)
+    return <p className="text-xs text-zinc-400 px-5 py-3">Nenhuma transação detalhada. Analise a fatura acima.</p>;
+
+  // Agrupa por categoria, ordenado por subtotal desc
+  const grouped = transactions.reduce<Record<string, Transaction[]>>((acc, t) => {
+    const cat = t.aiCategory ?? "Outros";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(t);
+    return acc;
+  }, {});
+
+  const sortedCategories = Object.entries(grouped).sort(
+    (a, b) =>
+      b[1].reduce((s, t) => s + parseFloat(t.amount), 0) -
+      a[1].reduce((s, t) => s + parseFloat(t.amount), 0)
+  );
+
+  return (
+    <div className="border-t border-zinc-100">
+      {sortedCategories.map(([category, txs]) => {
+        const subtotal = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
+        return (
+          <div key={category}>
+            <div className="flex items-center justify-between px-5 py-2 bg-zinc-50 border-b border-zinc-100">
+              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">{category}</span>
+              <span className="text-xs font-semibold text-zinc-600 tabular-nums">{formatCurrency(subtotal)}</span>
+            </div>
+            {txs.map((t) => (
+              <div key={t.id} className="flex items-center gap-3 px-8 py-2 border-b border-zinc-100 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-zinc-700 truncate">{t.description}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {t.transactionDate && (
+                      <span className="text-xs text-zinc-300">{t.transactionDate}</span>
+                    )}
+                    {t.isOptimizable && (
+                      <Badge variant="optimizable" className="text-xs py-0">Otimizável</Badge>
+                    )}
+                  </div>
+                  {t.aiNotes && <p className="text-xs text-amber-600 mt-0.5">{t.aiNotes}</p>}
+                </div>
+                <span className="text-xs font-semibold text-zinc-700 tabular-nums shrink-0">
+                  {formatCurrency(t.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function FaturasPage() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [cardName, setCardName] = useState("Nubank Mu");
@@ -45,13 +132,22 @@ export default function FaturasPage() {
 
   const [step, setStep] = useState<Step>("form");
   const [extracted, setExtracted] = useState<ExtractedFile | null>(null);
-
   const [loading, setLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<UploadResult | null>(null);
+  const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
 
-  // Etapa 1 — lê o arquivo e prepara para análise
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const loadInvoices = useCallback(async () => {
+    const res = await fetch(`/api/upload-fatura?year=${year}`);
+    const data = await res.json();
+    setInvoices(data.invoices ?? []);
+  }, [year]);
+
+  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+
   async function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
@@ -70,7 +166,7 @@ export default function FaturasPage() {
       const data = await res.json();
       if (data.preview !== undefined) {
         setExtracted(data as ExtractedFile);
-        setStep("extracted");
+        setStep("ready");
       } else {
         setError(data.error ?? "Erro ao ler o arquivo");
       }
@@ -81,7 +177,6 @@ export default function FaturasPage() {
     }
   }
 
-  // Etapa 2 — analisa com IA
   async function handleAnalyze() {
     if (!extracted) return;
     setAnalyzing(true);
@@ -105,6 +200,7 @@ export default function FaturasPage() {
       if (data.success) {
         setResult(data);
         setStep("done");
+        loadInvoices();
       } else {
         setError(data.error ?? "Erro na análise");
       }
@@ -123,28 +219,34 @@ export default function FaturasPage() {
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  const optimizable = result?.transactions.filter((t) => t.isOptimizable) ?? [];
+  // Faturas com transações salvas (agrupadas por cartão)
+  const invoicesWithDetail = invoices.filter((inv) => inv.hasDetail);
+  const invoicesByCard: Record<string, Invoice[]> = invoicesWithDetail.reduce((acc, inv) => {
+    if (!acc[inv.creditCardName!]) acc[inv.creditCardName!] = [];
+    acc[inv.creditCardName!].push(inv);
+    return acc;
+  }, {} as Record<string, Invoice[]>);
 
   return (
     <div className="p-6 space-y-6 max-w-4xl mx-auto">
-      <h1 className="text-xl font-bold text-zinc-900">Análise de Faturas</h1>
+      <h1 className="text-xl font-bold text-zinc-900">Faturas de Cartão</h1>
 
-      {/* Indicador de etapas */}
-      <div className="flex items-center gap-2 text-xs text-zinc-400">
-        <span className={step === "form" ? "text-emerald-600 font-semibold" : "text-zinc-300"}>1. Carregar arquivo</span>
-        <ChevronRight className="h-3 w-3" />
-        <span className={step === "extracted" ? "text-emerald-600 font-semibold" : step === "done" ? "text-zinc-300" : "text-zinc-300"}>2. Confirmar extração</span>
-        <ChevronRight className="h-3 w-3" />
-        <span className={step === "done" ? "text-emerald-600 font-semibold" : "text-zinc-300"}>3. Análise da IA</span>
-      </div>
+      {/* Upload / Análise */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Analisar nova fatura</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Indicador de etapas */}
+          <div className="flex items-center gap-2 text-xs text-zinc-400">
+            <span className={step === "form" ? "text-emerald-600 font-semibold" : "text-zinc-300"}>1. Carregar arquivo</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={step === "ready" ? "text-emerald-600 font-semibold" : step === "done" ? "text-zinc-300" : "text-zinc-300"}>2. Confirmar</span>
+            <ChevronRight className="h-3 w-3" />
+            <span className={step === "done" ? "text-emerald-600 font-semibold" : "text-zinc-300"}>3. Resultado</span>
+          </div>
 
-      {/* Etapa 1 — formulário */}
-      {step === "form" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Subir Fatura de Cartão</CardTitle>
-          </CardHeader>
-          <CardContent>
+          {step === "form" && (
             <form onSubmit={handleExtract} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
@@ -160,7 +262,7 @@ export default function FaturasPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-zinc-700 mb-1 block">Mês de referência</label>
+                  <label className="text-sm font-medium text-zinc-700 mb-1 block">Mês</label>
                   <select
                     value={month}
                     onChange={(e) => setMonth(parseInt(e.target.value))}
@@ -182,77 +284,45 @@ export default function FaturasPage() {
                   />
                 </div>
               </div>
-              <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                {loading ? (
-                  <><FileText className="h-4 w-4 animate-pulse" /> Extraindo texto...</>
-                ) : (
-                  <><Upload className="h-4 w-4" /> Extrair texto do arquivo</>
-                )}
+              <Button type="submit" disabled={loading}>
+                {loading
+                  ? <><FileText className="h-4 w-4 animate-pulse" /> Lendo arquivo...</>
+                  : <><Upload className="h-4 w-4" /> Carregar arquivo</>}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Etapa 2 — prévia do texto extraído */}
-      {step === "extracted" && extracted && (
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                Arquivo pronto para análise
-              </CardTitle>
-              <p className="text-xs text-zinc-400 mt-1">
-                {extracted.name} · {(extracted.size / 1024).toFixed(0)} KB · {cardName} · {MONTHS[month - 1]} {year}
-              </p>
-            </div>
-            <Button variant="outline" size="sm" onClick={reset}>Trocar arquivo</Button>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center gap-3 p-4 bg-zinc-50 rounded-lg border border-zinc-200">
-              <FileText className="h-8 w-8 text-zinc-400 shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-zinc-700">{extracted.name}</p>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  {extracted.mode === "pdf" ? "PDF — Claude vai ler o documento diretamente" : "CSV/Texto — conteúdo extraído"}
-                </p>
+          {step === "ready" && extracted && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 p-4 bg-zinc-50 rounded-lg border border-zinc-200">
+                <FileText className="h-8 w-8 text-zinc-400 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-zinc-700">{extracted.name}</p>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {(extracted.size / 1024).toFixed(0)} KB · {cardName} · {MONTHS[month - 1]} {year}
+                  </p>
+                  <p className="text-xs text-zinc-400">
+                    {extracted.mode === "pdf" ? "Claude vai ler o PDF diretamente" : "Arquivo de texto pronto"}
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={reset}>Trocar</Button>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleAnalyze} disabled={analyzing}>
+                  {analyzing
+                    ? <><Sparkles className="h-4 w-4 animate-pulse" /> Analisando...</>
+                    : <><Sparkles className="h-4 w-4" /> Analisar com IA</>}
+                </Button>
+                {analyzing && (
+                  <p className="text-xs text-zinc-400 self-center">Pode levar até 30 segundos…</p>
+                )}
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={handleAnalyze} disabled={analyzing} className="flex-1 sm:flex-none">
-                {analyzing ? (
-                  <><Sparkles className="h-4 w-4 animate-pulse" /> Analisando com IA...</>
-                ) : (
-                  <><Sparkles className="h-4 w-4" /> Analisar com IA</>
-                )}
-              </Button>
-              <Button variant="outline" onClick={reset}>Cancelar</Button>
-            </div>
-            {analyzing && (
-              <p className="text-xs text-zinc-400">O Claude está classificando cada transação… pode levar até 30 segundos.</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Erro */}
-      {error && (
-        <div className="flex items-start gap-2 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
-          <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-medium">Erro</p>
-            <p className="text-xs mt-0.5">{error}</p>
-          </div>
-        </div>
-      )}
-
-      {/* Etapa 3 — resultado */}
-      {step === "done" && result && (
-        <div className="space-y-4">
-          <Card>
-            <CardContent className="pt-5">
-              <div className="flex items-start gap-3">
+          {step === "done" && result && (
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-4 bg-emerald-50 rounded-lg border border-emerald-200">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0 mt-0.5" />
                 <div>
                   <p className="font-semibold text-zinc-800">
@@ -261,58 +331,76 @@ export default function FaturasPage() {
                   <p className="text-sm text-zinc-600 mt-1">{result.optimizationSummary}</p>
                 </div>
               </div>
-              <Button variant="outline" size="sm" className="mt-4" onClick={reset}>
-                Analisar outra fatura
-              </Button>
-            </CardContent>
-          </Card>
+              <Button variant="outline" size="sm" onClick={reset}>Analisar outra fatura</Button>
+            </div>
+          )}
 
-          {optimizable.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-amber-600 flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4" />
-                  Oportunidades de Otimização ({optimizable.length})
+          {error && (
+            <div className="flex items-start gap-2 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">Erro</p>
+                <p className="text-xs mt-0.5">{error}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Faturas salvas */}
+      {Object.keys(invoicesByCard).length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-zinc-500 uppercase tracking-wide">Faturas Analisadas</h2>
+          {Object.entries(invoicesByCard).map(([card, cardInvoices]) => (
+            <Card key={card}>
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <CreditCard className="h-4 w-4 text-zinc-400" />
+                  {card}
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {optimizable.map((t, i) => (
-                    <div key={i} className="flex items-start justify-between gap-4 py-2 border-b border-zinc-100 last:border-0">
-                      <div>
-                        <p className="text-sm font-medium text-zinc-800">{t.description}</p>
-                        {t.notes && <p className="text-xs text-amber-600 mt-0.5">{t.notes}</p>}
-                        <Badge variant="optimizable" className="mt-1">{t.category}</Badge>
+              <CardContent className="p-0">
+                <div className="divide-y divide-zinc-100">
+                  {cardInvoices.sort((a, b) => b.month - a.month).map((inv) => {
+                    const isExpanded = expandedId === inv.id;
+                    return (
+                      <div key={inv.id}>
+                        <button
+                          onClick={() => setExpandedId(isExpanded ? null : inv.id)}
+                          className="w-full flex items-center gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors text-left"
+                        >
+                          {isExpanded
+                            ? <ChevronDown className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                            : <ChevronRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />}
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-zinc-800">
+                              {MONTHS[inv.month - 1]} {inv.year}
+                            </span>
+                            <span className="text-xs text-zinc-400 ml-2">
+                              {inv.transactionCount} transações
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              inv.status === "paid"
+                                ? "bg-emerald-50 text-emerald-600"
+                                : "bg-zinc-100 text-zinc-500"
+                            }`}>
+                              {inv.status === "paid" ? "Pago" : "Estimado"}
+                            </span>
+                            <span className="text-sm font-semibold text-zinc-800 tabular-nums">
+                              {formatCurrency(inv.amount)}
+                            </span>
+                          </div>
+                        </button>
+                        {isExpanded && <InvoiceDetail invoiceId={inv.id} />}
                       </div>
-                      <span className="text-sm font-semibold text-zinc-800 shrink-0">{formatCurrency(t.amount)}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
-          )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Todas as Transações</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="divide-y divide-zinc-100">
-                {result.transactions.map((t, i) => (
-                  <div key={i} className="flex items-center justify-between py-3 gap-4">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-zinc-800 truncate">{t.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <Badge variant="estimated">{t.category}</Badge>
-                        {t.isOptimizable && <Badge variant="optimizable">Otimizável</Badge>}
-                      </div>
-                    </div>
-                    <span className="text-sm font-semibold text-zinc-800 shrink-0">{formatCurrency(t.amount)}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          ))}
         </div>
       )}
     </div>
