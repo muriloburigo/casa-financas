@@ -36,8 +36,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
+      <div className="w-full max-w-sm bg-white rounded-2xl shadow-md p-8">
         <div className="flex flex-col items-center mb-8">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 mb-4">
             <Home className="h-6 w-6 text-emerald-600" />
