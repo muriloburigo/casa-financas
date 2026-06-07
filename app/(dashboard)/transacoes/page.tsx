@@ -2,8 +2,10 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { formatCurrency, MONTHS } from "@/lib/utils";
-import { CheckCircle2, Clock, Trash2, Pencil } from "lucide-react";
+import { CheckCircle2, Clock, Trash2, Pencil, Plus, X, RepeatIcon } from "lucide-react";
 
 interface Entry {
   id: string;
@@ -63,12 +65,22 @@ function AmountCell({ entry, type, onSave }: {
   );
 }
 
+interface NewEntry {
+  description: string;
+  amount: string;
+  recurring: boolean;
+}
+
 export default function TransacoesPage() {
   const [expenses, setExpenses] = useState<Entry[]>([]);
   const [incomes, setIncomes] = useState<Entry[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year] = useState(2026);
   const [tab, setTab] = useState<Tab>("expenses");
+  const [adding, setAdding] = useState(false);
+  const [newEntry, setNewEntry] = useState<NewEntry>({ description: "", amount: "", recurring: false });
+  const [saving, setSaving] = useState(false);
+  const descRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(() => {
     fetch(`/api/dashboard?month=${month}&year=${year}`)
@@ -102,6 +114,30 @@ export default function TransacoesPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ amount, type: currentType }),
     });
+  }
+
+  async function addEntry() {
+    const amount = parseFloat(newEntry.amount.replace(",", "."));
+    if (!newEntry.description.trim() || isNaN(amount) || amount <= 0) return;
+    setSaving(true);
+    const res = await fetch("/api/transacoes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: newEntry.description.trim(),
+        amount,
+        month,
+        year,
+        type: currentType,
+        recurring: newEntry.recurring,
+      }),
+    });
+    setSaving(false);
+    if (res.ok) {
+      setAdding(false);
+      setNewEntry({ description: "", amount: "", recurring: false });
+      load();
+    }
   }
 
   async function remove(entry: Entry) {
@@ -169,8 +205,15 @@ export default function TransacoesPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{MONTHS[month - 1]} {year} — {tab === "expenses" ? "Despesas" : "Receitas"}</CardTitle>
+          <Button
+            size="sm"
+            variant={adding ? "outline" : "default"}
+            onClick={() => { setAdding((v) => !v); setTimeout(() => descRef.current?.focus(), 50); }}
+          >
+            {adding ? <><X className="h-3.5 w-3.5" /> Cancelar</> : <><Plus className="h-3.5 w-3.5" /> Adicionar</>}
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <div className="divide-y divide-zinc-100">
@@ -213,6 +256,46 @@ export default function TransacoesPage() {
               </div>
             ))}
           </div>
+
+          {/* Formulário de adição inline */}
+          {adding && (
+            <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 space-y-3">
+              <div className="flex gap-2">
+                <Input
+                  ref={descRef}
+                  value={newEntry.description}
+                  onChange={(e) => setNewEntry((p) => ({ ...p, description: e.target.value }))}
+                  placeholder="Descrição (ex: Mercado, Academia...)"
+                  className="flex-1"
+                  onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }}
+                />
+                <Input
+                  value={newEntry.amount}
+                  onChange={(e) => setNewEntry((p) => ({ ...p, amount: e.target.value }))}
+                  placeholder="Valor (R$)"
+                  className="w-32 text-right"
+                  onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newEntry.recurring}
+                    onChange={(e) => setNewEntry((p) => ({ ...p, recurring: e.target.checked }))}
+                    className="h-4 w-4 accent-emerald-600"
+                  />
+                  <span className="text-xs text-zinc-600 flex items-center gap-1">
+                    <RepeatIcon className="h-3 w-3" />
+                    Recorrente — repetir até dezembro
+                  </span>
+                </label>
+                <Button size="sm" onClick={addEntry} disabled={saving || !newEntry.description.trim() || !newEntry.amount}>
+                  {saving ? "Salvando..." : "Salvar"}
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
