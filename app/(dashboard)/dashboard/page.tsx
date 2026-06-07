@@ -6,6 +6,7 @@ import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { ExpenseTable } from "@/components/dashboard/expense-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MONTHS } from "@/lib/utils";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 interface DashboardData {
   monthlyData: Array<{ month: number; income: number; expenses: number }>;
@@ -46,15 +47,31 @@ export default function DashboardPage() {
     <div className="p-6 space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-900">Dashboard</h1>
-        <select
-          value={month}
-          onChange={(e) => setMonth(parseInt(e.target.value))}
-          className="text-sm border border-zinc-200 rounded-lg px-3 py-1.5 bg-white text-zinc-700"
-        >
-          {MONTHS.map((m, i) => (
-            <option key={i} value={i + 1}>{m} {year}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => { if (month > 1) setMonth(month - 1); }}
+            disabled={month === 1}
+            className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4 text-zinc-600" />
+          </button>
+          <select
+            value={month}
+            onChange={(e) => setMonth(parseInt(e.target.value))}
+            className="text-sm border border-zinc-200 rounded-lg px-3 py-1.5 bg-white text-zinc-700"
+          >
+            {MONTHS.map((m, i) => (
+              <option key={i} value={i + 1}>{m} {year}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => { if (month < 12) setMonth(month + 1); }}
+            disabled={month === 12}
+            className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight className="h-4 w-4 text-zinc-600" />
+          </button>
+        </div>
       </div>
 
       <SummaryCards
