@@ -120,33 +120,14 @@ function CCDetail({ entryId }: { entryId: string }) {
     <div className="bg-zinc-50 border-t border-zinc-100">
       {sortedCategories.map(([category, txs]) => {
         const subtotal = txs.reduce((s, t) => s + parseFloat(t.amount), 0);
+        const hasOptimizable = txs.some((t) => t.isOptimizable);
         return (
-          <div key={category}>
-            {/* Cabeçalho da categoria */}
-            <div className="flex items-center justify-between px-14 py-1.5 bg-zinc-100 border-b border-zinc-200">
-              <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">{category}</span>
-              <span className="text-xs font-semibold text-zinc-500 tabular-nums">{formatCurrency(subtotal)}</span>
+          <div key={category} className="flex items-center justify-between px-14 py-2 border-b border-zinc-100 last:border-0">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-600">{category}</span>
+              {hasOptimizable && <Badge variant="optimizable" className="text-xs py-0">Otimizável</Badge>}
             </div>
-            {/* Transações da categoria */}
-            {txs.map((t) => (
-              <div key={t.id} className="flex items-center gap-3 px-14 py-2 border-b border-zinc-100 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-zinc-700 truncate">{t.description}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {t.transactionDate && (
-                      <span className="text-xs text-zinc-300">{t.transactionDate}</span>
-                    )}
-                    {t.isOptimizable && (
-                      <Badge variant="optimizable" className="text-xs py-0">Otimizável</Badge>
-                    )}
-                  </div>
-                  {t.aiNotes && <p className="text-xs text-amber-600 mt-0.5">{t.aiNotes}</p>}
-                </div>
-                <span className="text-xs font-semibold text-zinc-700 tabular-nums shrink-0">
-                  {formatCurrency(t.amount)}
-                </span>
-              </div>
-            ))}
+            <span className="text-xs font-semibold text-zinc-700 tabular-nums">{formatCurrency(subtotal)}</span>
           </div>
         );
       })}
