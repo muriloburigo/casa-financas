@@ -3,6 +3,7 @@ import { generateObject } from "ai";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { expenseEntries, creditCardTransactions } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { EXPENSE_CATEGORIES } from "@/lib/utils";
 
@@ -91,25 +92,54 @@ export async function POST(req: Request) {
 
   const { object } = result;
 
-  // Salva entrada de despesa do cartão
-  const [expEntry] = await db
-    .insert(expenseEntries)
-    .values({
-      description: `${cardName} — Fatura`,
-      amount: object.totalAmount.toString(),
-      month,
-      year,
-      status: "paid",
-      isCreditCard: true,
-      creditCardName: cardName,
-    })
-    .returning();
+  // Encontra o lançamento existente deste cartão neste mês, ou cria um novo
+  const existing = await db
+    .select()
+    .from(expenseEntries)
+    .where(
+      and(
+        eq(expenseEntries.creditCardName, cardName),
+        eq(expenseEntries.month, month),
+        eq(expenseEntries.year, year)
+      )
+    )
+    .limit(1);
+
+  let expEntryId: string;
+
+  if (existing.length > 0) {
+    // Atualiza o lançamento existente com o valor real da fatura
+    await db
+      .update(expenseEntries)
+      .set({ amount: object.totalAmount.toString(), status: "paid" })
+      .where(eq(expenseEntries.id, existing[0].id));
+    expEntryId = existing[0].id;
+    // Remove transações antigas desta fatura antes de inserir as novas
+    await db
+      .delete(creditCardTransactions)
+      .where(eq(creditCardTransactions.expenseEntryId, expEntryId));
+  } else {
+    // Cria entrada nova se não existir
+    const [newEntry] = await db
+      .insert(expenseEntries)
+      .values({
+        description: cardName,
+        amount: object.totalAmount.toString(),
+        month,
+        year,
+        status: "paid",
+        isCreditCard: true,
+        creditCardName: cardName,
+      })
+      .returning();
+    expEntryId = newEntry.id;
+  }
 
   // Salva transações individuais
   if (object.transactions.length > 0) {
     await db.insert(creditCardTransactions).values(
       object.transactions.map((t) => ({
-        expenseEntryId: expEntry.id,
+        expenseEntryId: expEntryId,
         description: t.description,
         amount: t.amount.toString(),
         transactionDate: t.date ?? null,
@@ -128,6 +158,6 @@ export async function POST(req: Request) {
     transactionCount: object.transactions.length,
     optimizationSummary: object.optimizationSummary,
     transactions: object.transactions,
-    expenseEntryId: expEntry.id,
+    expenseEntryId: expEntryId,
   });
 }
