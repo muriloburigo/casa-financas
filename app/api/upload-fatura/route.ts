@@ -11,28 +11,28 @@ import { extractText } from "unpdf";
 export const maxDuration = 120;
 
 const invoiceSchema = z.object({
-  totalAmount: z.number().describe("Valor total da fatura em reais"),
+  totalAmount: z.number(),
   transactions: z.array(
     z.object({
-      description: z.string().describe("Descrição da transação como aparece na fatura"),
-      amount: z.number().describe("Valor em reais (positivo)"),
-      date: z.string().optional().describe("Data no formato DD/MM ou DD/MM/YYYY"),
-      merchant: z.string().optional().describe("Nome do estabelecimento limpo"),
-      category: z.string().describe(`Uma das categorias: ${EXPENSE_CATEGORIES.join(", ")}`),
-      subcategory: z.string().optional(),
-      isOptimizable: z.boolean().describe("Esta compra poderia ser evitada ou reduzida?"),
-      notes: z.string().optional().describe("Dica de otimização específica se aplicável"),
+      description: z.string(),
+      amount: z.number(),
+      date: z.string().optional(),
+      category: z.string(),
+      isOptimizable: z.boolean(),
+      notes: z.string().optional(),
     })
   ),
-  optimizationSummary: z.string().describe("Resumo em 2-3 frases das principais oportunidades de otimização encontradas"),
+  optimizationSummary: z.string(),
 });
 
-const SYSTEM_PROMPT = (cardName: string) =>
-  `Você é um analista financeiro especialista em faturas de cartão de crédito brasileiro.
-Analise a fatura do ${cardName} e extraia TODAS as transações de compra (ignore pagamentos, créditos e ajustes).
-Classifique cada transação nas categorias disponíveis.
-Marque como otimizável qualquer gasto supérfluo, duplicado ou que poderia ser reduzido.
-Responda sempre em português brasileiro.`;
+function cleanPdfText(raw: string): string {
+  return raw
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+/g, " ")           // colapsa espaços
+    .replace(/\n{3,}/g, "\n\n")        // colapsa linhas em branco
+    .replace(/[^\x20-\x7E\xC0-\xFF\n]/g, "") // remove chars de controle
+    .trim();
+}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -51,33 +51,64 @@ export async function POST(req: Request) {
   let textContent: string;
 
   if (isPdf) {
-    // Extrai texto do PDF com pdf-parse (funciona com PDFs digitais como Nubank)
     const arrayBuffer = await file.arrayBuffer();
     const { text } = await extractText(new Uint8Array(arrayBuffer), { mergePages: true });
-    textContent = Array.isArray(text) ? text.join("\n") : text;
+    const raw = Array.isArray(text) ? text.join("\n") : text;
+    textContent = cleanPdfText(raw);
 
-    if (!textContent || textContent.trim().length < 50) {
+    if (textContent.trim().length < 50) {
       return Response.json(
-        { error: "Não foi possível extrair texto do PDF. Tente subir o CSV da fatura." },
+        { error: "Não foi possível extrair texto do PDF. Tente o CSV da fatura." },
         { status: 422 }
       );
     }
   } else {
-    textContent = await file.text();
+    textContent = cleanPdfText(await file.text());
   }
 
-  const { object } = await generateObject({
-    model: anthropic("claude-sonnet-4-6"),
-    schema: invoiceSchema,
-    messages: [
-      {
-        role: "user",
-        content: `${SYSTEM_PROMPT(cardName)}\n\nTexto extraído da fatura:\n\n${textContent.slice(0, 15000)}`,
-      },
-    ],
-  });
+  // Limita a 8000 chars para não explodir o contexto de saída
+  const excerpt = textContent.slice(0, 8000);
 
-  // Encontra o lançamento existente deste cartão neste mês, ou cria um novo
+  let object: z.infer<typeof invoiceSchema>;
+
+  try {
+    const result = await generateObject({
+      model: anthropic("claude-sonnet-4-6"),
+      schema: invoiceSchema,
+      maxTokens: 4096,
+      messages: [
+        {
+          role: "user",
+          content: [
+            `Você é um analista de faturas de cartão brasileiro.`,
+            `Extraia do texto abaixo da fatura do ${cardName}:`,
+            `1. totalAmount: valor total da fatura`,
+            `2. transactions: lista de compras (ignore pagamentos e créditos)`,
+            `   - description: nome como aparece na fatura`,
+            `   - amount: valor em reais (positivo)`,
+            `   - date: data DD/MM se disponível`,
+            `   - category: uma de [${EXPENSE_CATEGORIES.join(", ")}]`,
+            `   - isOptimizable: true se gasto supérfluo ou reduzível`,
+            `   - notes: dica curta de otimização (só se isOptimizable)`,
+            `3. optimizationSummary: 1-2 frases sobre os maiores gastos`,
+            ``,
+            `FATURA:`,
+            excerpt,
+          ].join("\n"),
+        },
+      ],
+    });
+    object = result.object;
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    console.error("generateObject error:", errMsg);
+    return Response.json(
+      { error: `Erro ao analisar fatura: ${errMsg.slice(0, 200)}` },
+      { status: 500 }
+    );
+  }
+
+  // Upsert lançamento do cartão
   const existing = await db
     .select()
     .from(expenseEntries)
@@ -124,9 +155,9 @@ export async function POST(req: Request) {
         description: t.description,
         amount: t.amount.toString(),
         transactionDate: t.date ?? null,
-        merchant: t.merchant ?? null,
+        merchant: null,
         aiCategory: t.category,
-        aiSubcategory: t.subcategory ?? null,
+        aiSubcategory: null,
         aiNotes: t.notes ?? null,
         isOptimizable: t.isOptimizable,
       }))
