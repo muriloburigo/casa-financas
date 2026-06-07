@@ -25,24 +25,35 @@ const invoiceSchema = z.object({
   optimizationSummary: z.string(),
 });
 
-function cleanPdfText(raw: string): string {
+function cleanText(raw: string): string {
   return raw
     .replace(/\r\n/g, "\n")
-    .replace(/[ \t]+/g, " ")           // colapsa espaços
-    .replace(/\n{3,}/g, "\n\n")        // colapsa linhas em branco
-    .replace(/[^\x20-\x7E\xC0-\xFF\n]/g, "") // remove chars de controle
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[^\x20-\x7E\xC0-\xFF\n]/g, "")
     .trim();
 }
 
+// Converte "DD/MM" ou "DD/MM/YYYY" → "YYYY-MM-DD" (ou null se inválido)
+function parseDate(raw: string | undefined, year: number): string | null {
+  if (!raw) return null;
+  const parts = raw.split("/");
+  if (parts.length < 2) return null;
+  const [d, m, y] = parts;
+  const fullYear = y ? parseInt(y) : year;
+  const month = m.padStart(2, "0");
+  const day = d.padStart(2, "0");
+  const candidate = `${fullYear}-${month}-${day}`;
+  return isNaN(Date.parse(candidate)) ? null : candidate;
+}
+
+// POST /api/upload-fatura — Etapa 1: extrai texto do PDF
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const formData = await req.formData();
   const file = formData.get("file") as File;
-  const cardName = formData.get("cardName") as string;
-  const month = parseInt(formData.get("month") as string);
-  const year = parseInt(formData.get("year") as string);
 
   if (!file) return Response.json({ error: "Arquivo não enviado" }, { status: 400 });
 
@@ -53,8 +64,7 @@ export async function POST(req: Request) {
   if (isPdf) {
     const arrayBuffer = await file.arrayBuffer();
     const { text } = await extractText(new Uint8Array(arrayBuffer), { mergePages: true });
-    const raw = Array.isArray(text) ? text.join("\n") : text;
-    textContent = cleanPdfText(raw);
+    textContent = cleanText(Array.isArray(text) ? text.join("\n") : text);
 
     if (textContent.trim().length < 50) {
       return Response.json(
@@ -63,11 +73,26 @@ export async function POST(req: Request) {
       );
     }
   } else {
-    textContent = cleanPdfText(await file.text());
+    textContent = cleanText(await file.text());
   }
 
-  // Limita a 8000 chars para não explodir o contexto de saída
-  const excerpt = textContent.slice(0, 8000);
+  return Response.json({ extracted: textContent.slice(0, 8000), charCount: textContent.length });
+}
+
+// PUT /api/upload-fatura — Etapa 2: analisa texto com IA e salva
+export async function PUT(req: Request) {
+  const session = await auth();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json();
+  const { text, cardName, month, year } = body as {
+    text: string;
+    cardName: string;
+    month: number;
+    year: number;
+  };
+
+  if (!text || !cardName) return Response.json({ error: "Dados incompletos" }, { status: 400 });
 
   let object: z.infer<typeof invoiceSchema>;
 
@@ -80,35 +105,27 @@ export async function POST(req: Request) {
         {
           role: "user",
           content: [
-            `Você é um analista de faturas de cartão brasileiro.`,
-            `Extraia do texto abaixo da fatura do ${cardName}:`,
-            `1. totalAmount: valor total da fatura`,
+            `Analise a fatura do ${cardName} e extraia:`,
+            `1. totalAmount: valor total`,
             `2. transactions: lista de compras (ignore pagamentos e créditos)`,
-            `   - description: nome como aparece na fatura`,
-            `   - amount: valor em reais (positivo)`,
-            `   - date: data DD/MM se disponível`,
-            `   - category: uma de [${EXPENSE_CATEGORIES.join(", ")}]`,
-            `   - isOptimizable: true se gasto supérfluo ou reduzível`,
-            `   - notes: dica curta de otimização (só se isOptimizable)`,
-            `3. optimizationSummary: 1-2 frases sobre os maiores gastos`,
+            `   description, amount (reais), date (DD/MM), isOptimizable, notes (só se otimizável)`,
+            `   category: uma de [${EXPENSE_CATEGORIES.join(", ")}]`,
+            `3. optimizationSummary: 1-2 frases`,
             ``,
             `FATURA:`,
-            excerpt,
+            text,
           ].join("\n"),
         },
       ],
     });
     object = result.object;
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    console.error("generateObject error:", errMsg);
-    return Response.json(
-      { error: `Erro ao analisar fatura: ${errMsg.slice(0, 200)}` },
-      { status: 500 }
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("AI error:", msg);
+    return Response.json({ error: `Erro na análise IA: ${msg.slice(0, 200)}` }, { status: 500 });
   }
 
-  // Upsert lançamento do cartão
+  // Upsert lançamento
   const existing = await db
     .select()
     .from(expenseEntries)
@@ -129,9 +146,7 @@ export async function POST(req: Request) {
       .set({ amount: object.totalAmount.toString(), status: "paid" })
       .where(eq(expenseEntries.id, existing[0].id));
     expEntryId = existing[0].id;
-    await db
-      .delete(creditCardTransactions)
-      .where(eq(creditCardTransactions.expenseEntryId, expEntryId));
+    await db.delete(creditCardTransactions).where(eq(creditCardTransactions.expenseEntryId, expEntryId));
   } else {
     const [newEntry] = await db
       .insert(expenseEntries)
@@ -154,7 +169,7 @@ export async function POST(req: Request) {
         expenseEntryId: expEntryId,
         description: t.description,
         amount: t.amount.toString(),
-        transactionDate: t.date ?? null,
+        transactionDate: parseDate(t.date, year),
         merchant: null,
         aiCategory: t.category,
         aiSubcategory: null,
