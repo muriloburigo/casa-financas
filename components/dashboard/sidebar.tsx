@@ -11,6 +11,7 @@ import {
   MessageSquare,
   LogOut,
   DollarSign,
+  Sparkles,
 } from "lucide-react";
 
 const navItems = [
@@ -18,7 +19,7 @@ const navItems = [
   { href: "/transacoes", label: "Transações", icon: DollarSign },
   { href: "/faturas", label: "Faturas", icon: CreditCard },
   { href: "/investimentos", label: "Investimentos", icon: TrendingUp },
-  { href: "/chat", label: "Assistente IA", icon: MessageSquare },
+  { href: "/insights", label: "Insights IA", icon: Sparkles },
 ];
 
 interface SidebarProps {
