@@ -82,3 +82,12 @@ export const chatMessages = pgTable("chat_messages", {
   userId: uuid("user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// Insights gerados pela IA — um por ano, atualizado manualmente
+export const insightsCache = pgTable("insights_cache", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  year: integer("year").notNull().unique(),
+  payload: text("payload").notNull(), // JSON stringificado
+  generatedAt: timestamp("generated_at").defaultNow(),
+  generatedBy: text("generated_by"), // nome de quem gerou
+});

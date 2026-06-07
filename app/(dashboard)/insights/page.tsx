@@ -34,12 +34,12 @@ interface Insights {
 }
 
 interface InsightsData {
-  insights: Insights;
-  meta: {
+  insights: Insights | null;
+  generatedAt: string | null;
+  generatedBy: string | null;
+  meta?: {
     totalIncome: number;
     totalExpenses: number;
-    paidIncome: number;
-    paidExpenses: number;
     topExpenses: Array<{ desc: string; total: number }>;
   };
 }
@@ -71,9 +71,11 @@ const priorityDot = {
 export default function InsightsPage() {
   const [data, setData] = useState<InsightsData | null>(null);
   const [loading, setLoading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [year] = useState(2026);
 
-  async function load() {
+  // Carrega do cache — sem gerar
+  async function loadCache() {
     setLoading(true);
     try {
       const res = await fetch(`/api/insights?year=${year}`);
@@ -84,9 +86,21 @@ export default function InsightsPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  // Gera nova análise via POST
+  async function generate() {
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/insights?year=${year}`, { method: "POST" });
+      const json = await res.json();
+      setData(json);
+    } finally {
+      setGenerating(false);
+    }
+  }
 
-  const savingsRate = data
+  useEffect(() => { loadCache(); }, []);
+
+  const savingsRate = data?.meta
     ? (((data.meta.totalIncome - data.meta.totalExpenses) / data.meta.totalIncome) * 100).toFixed(1)
     : null;
 
@@ -95,47 +109,73 @@ export default function InsightsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-zinc-900">Insights {year}</h1>
-          <p className="text-sm text-zinc-500">Análise inteligente da sua situação financeira</p>
+          {data?.generatedAt ? (
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Gerado por {data.generatedBy} em {new Date(data.generatedAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </p>
+          ) : (
+            <p className="text-sm text-zinc-500">Nenhuma análise gerada ainda</p>
+          )}
         </div>
-        <Button variant="outline" onClick={load} disabled={loading} size="sm">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          {loading ? "Analisando..." : "Atualizar"}
+        <Button onClick={generate} disabled={generating} size="sm">
+          <Zap className={`h-3.5 w-3.5 ${generating ? "animate-pulse" : ""}`} />
+          {generating ? "Gerando análise..." : "Gerar nova análise"}
         </Button>
       </div>
 
-      {loading && !data && (
+      {loading && (
+        <div className="flex items-center justify-center py-16 text-zinc-400 text-sm">
+          Carregando...
+        </div>
+      )}
+
+      {!loading && !data?.insights && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+          <Zap className="h-10 w-10 text-zinc-200" />
+          <div>
+            <p className="text-zinc-600 font-medium">Nenhuma análise disponível</p>
+            <p className="text-sm text-zinc-400 mt-1">Clique em "Gerar nova análise" para que o Claude analise suas finanças</p>
+          </div>
+        </div>
+      )}
+
+      {generating && !data?.insights && (
         <div className="flex flex-col items-center justify-center py-20 gap-4 text-zinc-400">
           <Zap className="h-8 w-8 animate-pulse text-emerald-500" />
           <p className="text-sm">Claude está analisando seus dados financeiros...</p>
         </div>
       )}
 
-      {data && (
+      {data?.insights && (
         <>
           {/* Resumo executivo */}
           <Card className="border-l-4 border-l-emerald-500">
             <CardContent className="pt-5">
               <p className="text-sm text-zinc-700 leading-relaxed">{data.insights.summary}</p>
-              <div className="flex gap-6 mt-4 pt-4 border-t border-zinc-100">
-                <div>
-                  <p className="text-xs text-zinc-400">Receita Total</p>
-                  <p className="text-lg font-bold text-emerald-600">{formatCurrency(data.meta.totalIncome)}</p>
+              {data.meta && (
+                <div className="flex gap-6 mt-4 pt-4 border-t border-zinc-100">
+                  <div>
+                    <p className="text-xs text-zinc-400">Receita Total</p>
+                    <p className="text-lg font-bold text-emerald-600">{formatCurrency(data.meta.totalIncome)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-400">Despesa Total</p>
+                    <p className="text-lg font-bold text-red-500">{formatCurrency(data.meta.totalExpenses)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-zinc-400">Saldo</p>
+                    <p className={`text-lg font-bold ${data.meta.totalIncome - data.meta.totalExpenses >= 0 ? "text-emerald-600" : "text-red-500"}`}>
+                      {formatCurrency(data.meta.totalIncome - data.meta.totalExpenses)}
+                    </p>
+                  </div>
+                  {savingsRate && (
+                    <div>
+                      <p className="text-xs text-zinc-400">Taxa de Poupança</p>
+                      <p className="text-lg font-bold text-blue-600">{savingsRate}%</p>
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <p className="text-xs text-zinc-400">Despesa Total</p>
-                  <p className="text-lg font-bold text-red-500">{formatCurrency(data.meta.totalExpenses)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-zinc-400">Saldo</p>
-                  <p className={`text-lg font-bold ${data.meta.totalIncome - data.meta.totalExpenses >= 0 ? "text-emerald-600" : "text-red-500"}`}>
-                    {formatCurrency(data.meta.totalIncome - data.meta.totalExpenses)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-zinc-400">Taxa de Poupança</p>
-                  <p className="text-lg font-bold text-blue-600">{savingsRate}%</p>
-                </div>
-              </div>
+              )}
             </CardContent>
           </Card>
 
@@ -239,6 +279,7 @@ export default function InsightsPage() {
           </Card>
 
           {/* Top despesas */}
+          {data.meta && (
           <Card>
             <CardHeader>
               <CardTitle>Maiores Despesas do Ano</CardTitle>
@@ -246,7 +287,7 @@ export default function InsightsPage() {
             <CardContent className="p-0">
               <div className="divide-y divide-zinc-100">
                 {data.meta.topExpenses.slice(0, 8).map((e, i) => {
-                  const pct = data.meta.totalExpenses > 0 ? (e.total / data.meta.totalExpenses * 100) : 0;
+                  const pct = data.meta!.totalExpenses > 0 ? (e.total / data.meta!.totalExpenses * 100) : 0;
                   return (
                     <div key={i} className="flex items-center gap-3 px-5 py-3">
                       <span className="text-xs text-zinc-400 w-4 shrink-0">{i + 1}</span>
@@ -266,6 +307,7 @@ export default function InsightsPage() {
               </div>
             </CardContent>
           </Card>
+          )}
         </>
       )}
     </div>
