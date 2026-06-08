@@ -7,6 +7,7 @@ import { EXPENSE_CATEGORIES } from "@/lib/utils";
 
 export const maxDuration = 120;
 
+
 // GET — lista faturas de cartão que têm transações detalhadas
 export async function GET(req: Request) {
   const session = await auth();
@@ -209,7 +210,7 @@ export async function PUT(req: Request) {
   if (existing.length > 0) {
     await db
       .update(expenseEntries)
-      .set({ amount: String(object.totalAmount), status: "paid" })
+      .set({ amount: String(object.totalAmount) })
       .where(eq(expenseEntries.id, existing[0].id));
     expEntryId = existing[0].id;
     await db.delete(creditCardTransactions).where(eq(creditCardTransactions.expenseEntryId, expEntryId));
@@ -221,7 +222,7 @@ export async function PUT(req: Request) {
         amount: String(object.totalAmount),
         month,
         year,
-        status: "paid",
+        status: "estimated",
         isCreditCard: true,
         creditCardName: cardName,
       })
