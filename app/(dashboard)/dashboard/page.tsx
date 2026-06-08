@@ -14,11 +14,12 @@ interface DashboardData {
     month: number;
     year: number;
     totalIncome: number;
+    totalBenefits: number;
     totalExpenses: number;
     totalInvestments: number;
     balance: number;
     expenses: Array<{ id: string; description: string; amount: string; month: number; year: number; status: string; isCreditCard: boolean; creditCardName: string | null }>;
-    incomes: Array<{ id: string; description: string; amount: string; month: number; year: number; status: string }>;
+    incomes: Array<{ id: string; description: string; amount: string; month: number; year: number; status: string; isBenefit: boolean }>;
   };
 }
 
@@ -76,6 +77,7 @@ export default function DashboardPage() {
 
       <SummaryCards
         totalIncome={currentMonth.totalIncome}
+        totalBenefits={currentMonth.totalBenefits}
         totalExpenses={currentMonth.totalExpenses}
         totalInvestments={currentMonth.totalInvestments}
         balance={currentMonth.balance}

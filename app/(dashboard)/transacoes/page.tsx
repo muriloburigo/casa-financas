@@ -9,7 +9,7 @@ import { formatCurrency, MONTHS } from "@/lib/utils";
 import {
   CheckCircle2, Clock, Trash2, Pencil, Plus, X,
   RepeatIcon, ChevronDown, ChevronRight, CreditCard,
-  ChevronLeft,
+  ChevronLeft, Gift,
 } from "lucide-react";
 
 interface Entry {
@@ -21,6 +21,7 @@ interface Entry {
   status: string;
   isCreditCard?: boolean;
   creditCardName?: string | null;
+  isBenefit?: boolean;
 }
 
 interface CCTransaction {
@@ -40,6 +41,7 @@ interface NewEntry {
   description: string;
   amount: string;
   recurring: boolean;
+  isBenefit: boolean;
 }
 
 // Célula de valor editável inline
@@ -143,7 +145,7 @@ export default function TransacoesPage() {
   const [tab, setTab] = useState<Tab>("expenses");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [newEntry, setNewEntry] = useState<NewEntry>({ description: "", amount: "", recurring: false });
+  const [newEntry, setNewEntry] = useState<NewEntry>({ description: "", amount: "", recurring: false, isBenefit: false });
   const [saving, setSaving] = useState(false);
   const descRef = useRef<HTMLInputElement>(null);
 
@@ -181,6 +183,16 @@ export default function TransacoesPage() {
     });
   }
 
+  async function toggleBenefit(entry: Entry) {
+    const next = !entry.isBenefit;
+    setIncomes((prev) => prev.map((e) => e.id === entry.id ? { ...e, isBenefit: next } : e));
+    await fetch(`/api/transacoes/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isBenefit: next, type: "income" }),
+    });
+  }
+
   async function remove(entry: Entry) {
     const setter = tab === "incomes" ? setIncomes : setExpenses;
     setter((prev) => prev.filter((e) => e.id !== entry.id));
@@ -201,19 +213,22 @@ export default function TransacoesPage() {
         year,
         type: currentType,
         recurring: newEntry.recurring,
+        isBenefit: tab === "incomes" ? newEntry.isBenefit : false,
       }),
     });
     setSaving(false);
     if (res.ok) {
       setAdding(false);
-      setNewEntry({ description: "", amount: "", recurring: false });
+      setNewEntry({ description: "", amount: "", recurring: false, isBenefit: false });
       load();
     }
   }
 
   const entries = tab === "expenses" ? expenses : incomes;
-  const totalPaid = entries.filter((e) => e.status === "paid").reduce((s, e) => s + parseFloat(e.amount), 0);
-  const totalEstimated = entries.filter((e) => e.status === "estimated").reduce((s, e) => s + parseFloat(e.amount), 0);
+  const regularEntries = tab === "incomes" ? entries.filter((e) => !e.isBenefit) : entries;
+  const benefitEntries = tab === "incomes" ? entries.filter((e) => e.isBenefit) : [];
+  const totalPaid = regularEntries.filter((e) => e.status === "paid").reduce((s, e) => s + parseFloat(e.amount), 0);
+  const totalEstimated = regularEntries.filter((e) => e.status === "estimated").reduce((s, e) => s + parseFloat(e.amount), 0);
 
   return (
     <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-3xl mx-auto">
@@ -303,7 +318,7 @@ export default function TransacoesPage() {
             {entries.length === 0 && (
               <p className="text-sm text-zinc-400 py-8 text-center">Nenhum lançamento para este mês</p>
             )}
-            {entries.map((entry) => {
+            {regularEntries.map((entry) => {
               const isExpanded = expandedId === entry.id;
               return (
                 <div key={entry.id}>
@@ -343,6 +358,17 @@ export default function TransacoesPage() {
                     {/* Valor editável */}
                     <AmountCell entry={entry} type={currentType} onSave={updateAmount} />
 
+                    {/* Marcar como benefício (só receitas) */}
+                    {tab === "incomes" && (
+                      <button
+                        onClick={() => toggleBenefit(entry)}
+                        title="Marcar como benefício (iFood, vale)"
+                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-amber-400"
+                      >
+                        <Gift className="h-4 w-4" />
+                      </button>
+                    )}
+
                     {/* Remover */}
                     <button
                       onClick={() => remove(entry)}
@@ -361,6 +387,43 @@ export default function TransacoesPage() {
               );
             })}
           </div>
+
+          {/* Seção de benefícios (só em receitas) */}
+          {benefitEntries.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 px-5 py-2 bg-amber-50 border-t border-amber-100">
+                <Gift className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Benefícios</span>
+                <span className="text-xs text-amber-500 ml-auto">não entram no saldo livre</span>
+              </div>
+              {benefitEntries.map((entry) => (
+                <div key={entry.id} className="flex items-center gap-3 px-5 py-3 hover:bg-amber-50/50 group transition-colors bg-amber-50/20">
+                  <button onClick={() => toggleStatus(entry)} className="shrink-0 transition-transform hover:scale-110">
+                    {entry.status === "paid"
+                      ? <CheckCircle2 className="h-5 w-5 text-amber-400" />
+                      : <Clock className="h-5 w-5 text-zinc-300 hover:text-zinc-400" />}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-zinc-700 truncate">{entry.description}</p>
+                  </div>
+                  <AmountCell entry={entry} type="income" onSave={updateAmount} />
+                  <button
+                    onClick={() => toggleBenefit(entry)}
+                    title="Remover de benefícios"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Gift className="h-4 w-4 text-amber-400 hover:text-zinc-400" />
+                  </button>
+                  <button
+                    onClick={() => remove(entry)}
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-red-400"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
 
           {/* Formulário de adição inline */}
           {adding && (
@@ -383,18 +446,34 @@ export default function TransacoesPage() {
                 />
               </div>
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={newEntry.recurring}
-                    onChange={(e) => setNewEntry((p) => ({ ...p, recurring: e.target.checked }))}
-                    className="h-4 w-4 accent-emerald-600"
-                  />
-                  <span className="text-xs text-zinc-600 flex items-center gap-1">
-                    <RepeatIcon className="h-3 w-3" />
-                    Recorrente — repetir até dezembro
-                  </span>
-                </label>
+                <div className="flex flex-wrap gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={newEntry.recurring}
+                      onChange={(e) => setNewEntry((p) => ({ ...p, recurring: e.target.checked }))}
+                      className="h-4 w-4 accent-emerald-600"
+                    />
+                    <span className="text-xs text-zinc-600 flex items-center gap-1">
+                      <RepeatIcon className="h-3 w-3" />
+                      Recorrente até dezembro
+                    </span>
+                  </label>
+                  {tab === "incomes" && (
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={newEntry.isBenefit}
+                        onChange={(e) => setNewEntry((p) => ({ ...p, isBenefit: e.target.checked }))}
+                        className="h-4 w-4 accent-amber-500"
+                      />
+                      <span className="text-xs text-zinc-600 flex items-center gap-1">
+                        <Gift className="h-3 w-3 text-amber-500" />
+                        Benefício (iFood, vale)
+                      </span>
+                    </label>
+                  )}
+                </div>
                 <Button size="sm" onClick={addEntry} disabled={saving || !newEntry.description.trim() || !newEntry.amount}>
                   {saving ? "Salvando..." : "Salvar"}
                 </Button>

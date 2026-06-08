@@ -6,26 +6,32 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { description, amount, month, year, type, recurring } = await req.json();
+  const { description, amount, month, year, type, recurring, isBenefit } = await req.json();
 
-  // months to insert: just this month, or from this month to December
   const months: number[] = recurring
     ? Array.from({ length: 12 - month + 1 }, (_, i) => month + i)
     : [month];
 
-  const rows = months.map((m) => ({
-    description,
-    amount: String(amount),
-    month: m,
-    year,
-    status: "estimated" as const,
-  }));
-
   if (type === "income") {
+    const rows = months.map((m) => ({
+      description,
+      amount: String(amount),
+      month: m,
+      year,
+      status: "estimated" as const,
+      isBenefit: isBenefit ?? false,
+    }));
     await db.insert(incomeEntries).values(rows);
+    return Response.json({ success: true, count: rows.length });
   } else {
+    const rows = months.map((m) => ({
+      description,
+      amount: String(amount),
+      month: m,
+      year,
+      status: "estimated" as const,
+    }));
     await db.insert(expenseEntries).values(rows);
+    return Response.json({ success: true, count: rows.length });
   }
-
-  return Response.json({ success: true, count: rows.length });
 }

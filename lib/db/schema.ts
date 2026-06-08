@@ -34,6 +34,7 @@ export const incomeEntries = pgTable("income_entries", {
   month: integer("month").notNull(),
   year: integer("year").notNull(),
   status: varchar("status", { length: 10 }).notNull().default("estimated"), // 'paid' | 'estimated'
+  isBenefit: boolean("is_benefit").default(false), // benefício (vale alimentação, iFood) — não entra no saldo livre
   categoryId: uuid("category_id").references(() => categories.id),
   createdAt: timestamp("created_at").defaultNow(),
 });

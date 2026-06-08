@@ -9,11 +9,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   const { id } = await params;
   const body = await req.json();
-  const { type, status, amount } = body;
+  const { type, status, amount, isBenefit } = body;
 
   const patch: Record<string, unknown> = {};
   if (status !== undefined) patch.status = status;
   if (amount !== undefined) patch.amount = String(amount);
+  if (isBenefit !== undefined) patch.isBenefit = isBenefit;
 
   if (type === "income") {
     await db.update(incomeEntries).set(patch).where(eq(incomeEntries.id, id));

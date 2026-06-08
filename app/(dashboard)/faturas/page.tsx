@@ -126,7 +126,7 @@ function InvoiceDetail({ invoiceId }: { invoiceId: string }) {
 
 export default function FaturasPage() {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [cardName, setCardName] = useState("Nubank Mu");
+  const [cardName, setCardName] = useState("");
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year] = useState(2026);
 
@@ -256,6 +256,7 @@ export default function FaturasPage() {
                     onChange={(e) => setCardName(e.target.value)}
                     className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2 bg-white text-zinc-700"
                   >
+                    <option value="">Selecione o cartão...</option>
                     <option>Nubank Mu</option>
                     <option>Nubank Ma</option>
                     <option>Cartão Caixa</option>
@@ -279,12 +280,13 @@ export default function FaturasPage() {
                     ref={fileRef}
                     type="file"
                     accept=".pdf,.csv,.txt,application/pdf,text/csv,text/plain"
+                    capture={undefined}
                     className="w-full text-sm text-zinc-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
                     required
                   />
                 </div>
               </div>
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" disabled={loading || !cardName}>
                 {loading
                   ? <><FileText className="h-4 w-4 animate-pulse" /> Lendo arquivo...</>
                   : <><Upload className="h-4 w-4" /> Carregar arquivo</>}

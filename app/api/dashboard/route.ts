@@ -31,7 +31,11 @@ export async function GET(req: Request) {
   const currentIncomes = incomes.filter((i) => i.month === month);
   const currentInvestments = investments.filter((i) => i.month === month);
 
-  const totalIncome = currentIncomes.reduce((s, i) => s + parseFloat(i.amount), 0);
+  const regularIncomes = currentIncomes.filter((i) => !i.isBenefit);
+  const benefitIncomes = currentIncomes.filter((i) => i.isBenefit);
+
+  const totalIncome = regularIncomes.reduce((s, i) => s + parseFloat(i.amount), 0);
+  const totalBenefits = benefitIncomes.reduce((s, i) => s + parseFloat(i.amount), 0);
   const totalExpenses = currentExpenses.reduce((s, e) => s + parseFloat(e.amount), 0);
   const totalInvestments = currentInvestments.reduce((s, i) => s + parseFloat(i.amount), 0);
 
@@ -41,6 +45,7 @@ export async function GET(req: Request) {
       month,
       year,
       totalIncome,
+      totalBenefits,
       totalExpenses,
       totalInvestments,
       balance: totalIncome - totalExpenses,
