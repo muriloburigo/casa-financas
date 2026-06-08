@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { expenseEntries, incomeEntries, investmentEntries, creditCardTransactions } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 
 export async function GET(req: Request) {
@@ -12,9 +12,9 @@ export async function GET(req: Request) {
   const month = parseInt(searchParams.get("month") ?? (new Date().getMonth() + 1).toString());
 
   const [expenses, incomes, investments] = await Promise.all([
-    db.select().from(expenseEntries).where(eq(expenseEntries.year, year)),
-    db.select().from(incomeEntries).where(eq(incomeEntries.year, year)),
-    db.select().from(investmentEntries).where(eq(investmentEntries.year, year)),
+    db.select().from(expenseEntries).where(eq(expenseEntries.year, year)).orderBy(asc(expenseEntries.description)),
+    db.select().from(incomeEntries).where(eq(incomeEntries.year, year)).orderBy(asc(incomeEntries.description)),
+    db.select().from(investmentEntries).where(eq(investmentEntries.year, year)).orderBy(asc(investmentEntries.description)),
   ]);
 
   // Monthly aggregates
