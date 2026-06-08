@@ -136,6 +136,7 @@ export default function FaturasPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState("");
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -216,6 +217,7 @@ export default function FaturasPage() {
     setExtracted(null);
     setResult(null);
     setError("");
+    setSelectedFileName("");
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -276,17 +278,27 @@ export default function FaturasPage() {
                 </div>
                 <div>
                   <label className="text-sm font-medium text-zinc-700 mb-1 block">Arquivo (PDF ou CSV)</label>
+                  {/* Input escondido — botão visível para compatibilidade mobile */}
                   <input
                     ref={fileRef}
                     type="file"
-                    accept=".pdf,.csv,.txt,application/pdf,text/csv,text/plain"
-                    capture={undefined}
-                    className="w-full text-sm text-zinc-600 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100"
-                    required
+                    accept=".pdf,.csv"
+                    className="sr-only"
+                    onChange={(e) => setSelectedFileName(e.target.files?.[0]?.name ?? "")}
                   />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm border border-zinc-200 rounded-lg bg-white text-left hover:bg-zinc-50 active:bg-zinc-100 transition-colors"
+                  >
+                    <FileText className="h-4 w-4 text-zinc-400 shrink-0" />
+                    <span className={selectedFileName ? "text-zinc-800 truncate" : "text-zinc-400"}>
+                      {selectedFileName || "Toque para selecionar..."}
+                    </span>
+                  </button>
                 </div>
               </div>
-              <Button type="submit" disabled={loading || !cardName}>
+              <Button type="submit" disabled={loading || !cardName || !selectedFileName}>
                 {loading
                   ? <><FileText className="h-4 w-4 animate-pulse" /> Lendo arquivo...</>
                   : <><Upload className="h-4 w-4" /> Carregar arquivo</>}
