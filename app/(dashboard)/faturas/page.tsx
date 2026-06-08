@@ -149,7 +149,8 @@ export default function FaturasPage() {
 
   useEffect(() => { loadInvoices(); }, [loadInvoices]);
 
-  async function handleExtract(e: React.FormEvent) {
+  // Lê o arquivo no browser com FileReader (sem round-trip ao servidor)
+  function handleExtract(e: React.FormEvent) {
     e.preventDefault();
     const file = fileRef.current?.files?.[0];
     if (!file) return;
@@ -159,22 +160,45 @@ export default function FaturasPage() {
     setExtracted(null);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
+    const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
+    const reader = new FileReader();
 
-    try {
-      const res = await fetch("/api/upload-fatura", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.preview !== undefined) {
-        setExtracted(data as ExtractedFile);
-        setStep("ready");
-      } else {
-        setError(data.error ?? "Erro ao ler o arquivo");
-      }
-    } catch {
-      setError("Erro de conexão ao ler o arquivo");
-    } finally {
+    reader.onerror = () => {
+      setError("Não foi possível ler o arquivo. Tente novamente.");
       setLoading(false);
+    };
+
+    if (isPdf) {
+      reader.onload = () => {
+        // Remove o prefixo "data:application/pdf;base64,"
+        const dataUrl = reader.result as string;
+        const base64 = dataUrl.split(",")[1];
+        setExtracted({
+          mode: "pdf",
+          preview: file.name,
+          base64,
+          mimeType: "application/pdf",
+          size: file.size,
+          name: file.name,
+        });
+        setStep("ready");
+        setLoading(false);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      reader.onload = () => {
+        const text = reader.result as string;
+        setExtracted({
+          mode: "text",
+          preview: text.slice(0, 500),
+          fullText: text,
+          size: file.size,
+          name: file.name,
+        });
+        setStep("ready");
+        setLoading(false);
+      };
+      reader.readAsText(file, "utf-8");
     }
   }
 
