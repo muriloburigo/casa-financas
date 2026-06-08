@@ -42,7 +42,7 @@ export function FloatingChat() {
 
       {/* Drawer lateral */}
       <div className={cn(
-        "fixed top-0 right-0 z-50 h-full w-full max-w-sm bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out",
+        "fixed top-0 right-0 z-50 h-[calc(100%-64px)] md:h-full w-full max-w-sm bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out",
         open ? "translate-x-0" : "translate-x-full"
       )}>
         {/* Header */}
@@ -142,7 +142,7 @@ export function FloatingChat() {
       <button
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "fixed bottom-6 right-6 z-50 flex h-13 w-13 items-center justify-center rounded-full shadow-lg transition-all duration-200",
+          "fixed bottom-20 right-4 md:bottom-6 md:right-6 z-50 flex items-center justify-center rounded-full shadow-lg transition-all duration-200",
           open ? "bg-zinc-700 rotate-90 scale-90" : "bg-emerald-600 hover:bg-emerald-700 hover:scale-105"
         )}
         style={{ height: 52, width: 52 }}

@@ -44,7 +44,7 @@ export default function DashboardPage() {
   const { currentMonth, monthlyData } = data;
 
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-zinc-900">Dashboard</h1>
         <div className="flex items-center gap-1">

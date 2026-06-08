@@ -228,7 +228,7 @@ export default function FaturasPage() {
   }, {} as Record<string, Invoice[]>);
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 md:space-y-6 max-w-4xl mx-auto">
       <h1 className="text-xl font-bold text-zinc-900">Faturas de Cartão</h1>
 
       {/* Upload / Análise */}
