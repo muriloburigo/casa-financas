@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
-import { expenseEntries, creditCardTransactions } from "@/lib/db/schema";
+import { expenseEntries, creditCardTransactions, categoryRules } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { EXPENSE_CATEGORIES } from "@/lib/utils";
@@ -100,6 +100,13 @@ export async function PUT(req: Request) {
     mode: "pdf" | "text";
   };
 
+  // Carrega regras de categoria salvas pelo usuário
+  const rules = await db.select().from(categoryRules).orderBy(categoryRules.pattern);
+  const rulesBlock = rules.length > 0
+    ? `\nREGRAS FIXAS DE CATEGORIA (aplique SEMPRE, têm prioridade sobre sua classificação):\n` +
+      rules.map((r) => `- Se o nome contém "${r.pattern}" → categoria "${r.category}"`).join("\n") + "\n"
+    : "";
+
   const prompt = [
     `Analise a fatura do cartão ${cardName} e retorne um JSON com a estrutura:`,
     `{`,
@@ -116,7 +123,7 @@ export async function PUT(req: Request) {
     `  ],`,
     `  "optimizationSummary": "1-2 frases sobre maiores gastos"`,
     `}`,
-    ``,
+    rulesBlock,
     `Ignore pagamentos, créditos e ajustes. Retorne APENAS o JSON, sem markdown.`,
   ].join("\n");
 

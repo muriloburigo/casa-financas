@@ -7,8 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { formatCurrency, MONTHS } from "@/lib/utils";
 import {
   Upload, FileText, AlertTriangle, CheckCircle2, Sparkles,
-  ChevronRight, CreditCard, ChevronDown,
+  ChevronRight, CreditCard, ChevronDown, Tag, Trash2, Plus,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 interface Transaction {
   id: string;
@@ -141,13 +142,51 @@ export default function FaturasPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  interface CategoryRule { id: string; pattern: string; category: string; }
+  const [rules, setRules] = useState<CategoryRule[]>([]);
+  const [newPattern, setNewPattern] = useState("");
+  const [newCategory, setNewCategory] = useState("");
+  const [savingRule, setSavingRule] = useState(false);
+
   const loadInvoices = useCallback(async () => {
     const res = await fetch(`/api/upload-fatura?year=${year}`);
     const data = await res.json();
     setInvoices(data.invoices ?? []);
   }, [year]);
 
-  useEffect(() => { loadInvoices(); }, [loadInvoices]);
+  const loadRules = useCallback(async () => {
+    const res = await fetch("/api/category-rules");
+    const data = await res.json();
+    setRules(data.rules ?? []);
+  }, []);
+
+  useEffect(() => { loadInvoices(); loadRules(); }, [loadInvoices, loadRules]);
+
+  async function addRule() {
+    if (!newPattern.trim() || !newCategory.trim()) return;
+    setSavingRule(true);
+    const res = await fetch("/api/category-rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pattern: newPattern.trim(), category: newCategory.trim() }),
+    });
+    const data = await res.json();
+    setSavingRule(false);
+    if (data.rule) {
+      setRules((prev) => [...prev, data.rule]);
+      setNewPattern("");
+      setNewCategory("");
+    }
+  }
+
+  async function deleteRule(id: string) {
+    await fetch("/api/category-rules", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setRules((prev) => prev.filter((r) => r.id !== id));
+  }
 
   // Lê o arquivo no browser com FileReader (sem round-trip ao servidor)
   function handleExtract(e: React.FormEvent) {
@@ -382,6 +421,56 @@ export default function FaturasPage() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Regras de categoria */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Tag className="h-4 w-4 text-zinc-400" />
+            Regras de Categoria
+          </CardTitle>
+          <p className="text-xs text-zinc-400 mt-0.5">Aplicadas automaticamente em todas as faturas futuras</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {rules.length > 0 && (
+            <div className="divide-y divide-zinc-100">
+              {rules.map((r) => (
+                <div key={r.id} className="flex items-center gap-3 py-2">
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-zinc-700">
+                      Se contém <span className="font-mono bg-zinc-100 px-1 rounded text-xs">{r.pattern}</span>
+                      {" → "}
+                      <span className="font-semibold text-emerald-700">{r.category}</span>
+                    </span>
+                  </div>
+                  <button onClick={() => deleteRule(r.id)} className="shrink-0 text-zinc-300 hover:text-red-400 transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Input
+              value={newPattern}
+              onChange={(e) => setNewPattern(e.target.value)}
+              placeholder="Trecho do nome (ex: Sesc Cacupé)"
+              className="flex-1 text-sm h-9"
+              onKeyDown={(e) => { if (e.key === "Enter") addRule(); }}
+            />
+            <Input
+              value={newCategory}
+              onChange={(e) => setNewCategory(e.target.value)}
+              placeholder="Categoria"
+              className="w-36 text-sm h-9"
+              onKeyDown={(e) => { if (e.key === "Enter") addRule(); }}
+            />
+            <Button size="sm" onClick={addRule} disabled={savingRule || !newPattern.trim() || !newCategory.trim()} className="shrink-0">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

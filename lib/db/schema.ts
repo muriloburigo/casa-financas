@@ -84,6 +84,14 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Regras de categoria para análise de faturas
+export const categoryRules = pgTable("category_rules", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  pattern: text("pattern").notNull(), // trecho do nome (case-insensitive)
+  category: text("category").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insights gerados pela IA — um por ano, atualizado manualmente
 export const insightsCache = pgTable("insights_cache", {
   id: uuid("id").primaryKey().defaultRandom(),
