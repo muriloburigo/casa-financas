@@ -246,11 +246,11 @@ export default function OrcamentoPage() {
   const variableCategories = EXPENSE_CATEGORIES.filter((c) => CATEGORY_BUCKET[c] === "variable");
 
   const totalFixedCap = fixedCategories.reduce((s, c) => s + (caps[c] ?? 0), 0);
-  const totalFixedActual = fixedCategories.reduce((s, c) => s + (actual[c] ?? 0), 0);
   const totalVariableCap = variableCategories.reduce((s, c) => s + (caps[c] ?? 0), 0);
-  const totalVariableActual = variableCategories.reduce((s, c) => s + (actual[c] ?? 0), 0);
 
   const totalAlocado = EXPENSE_CATEGORIES.reduce((s, c) => s + (caps[c] ?? 0), 0);
+  const fixedPctOfTotal = totalAlocado > 0 ? (totalFixedCap / totalAlocado) * 100 : 0;
+  const variablePctOfTotal = totalAlocado > 0 ? (totalVariableCap / totalAlocado) * 100 : 0;
   const investmentCap = caps[INVESTMENT_CATEGORY] ?? 0;
   const investmentActual = actual[INVESTMENT_CATEGORY] ?? 0;
   const investmentShort = investmentCap > 0 && investmentActual < investmentCap;
@@ -374,10 +374,8 @@ export default function OrcamentoPage() {
                 Custos Fixos
               </CardTitle>
               <div className="text-right shrink-0">
-                <span className={`text-sm font-semibold tabular-nums ${totalFixedCap > 0 && totalFixedActual > totalFixedCap ? "text-red-500" : "text-zinc-800"}`}>
-                  {formatCurrency(totalFixedActual)}
-                </span>
-                <span className="text-xs text-zinc-400 tabular-nums"> de {formatCurrency(totalFixedCap)}</span>
+                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{formatCurrency(totalFixedCap)}</span>
+                <span className="text-xs text-zinc-400 tabular-nums"> · {fixedPctOfTotal.toFixed(0)}% do orçamento</span>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -404,10 +402,8 @@ export default function OrcamentoPage() {
                 Estilo de Vida
               </CardTitle>
               <div className="text-right shrink-0">
-                <span className={`text-sm font-semibold tabular-nums ${totalVariableCap > 0 && totalVariableActual > totalVariableCap ? "text-red-500" : "text-zinc-800"}`}>
-                  {formatCurrency(totalVariableActual)}
-                </span>
-                <span className="text-xs text-zinc-400 tabular-nums"> de {formatCurrency(totalVariableCap)}</span>
+                <span className="text-sm font-semibold text-zinc-800 tabular-nums">{formatCurrency(totalVariableCap)}</span>
+                <span className="text-xs text-zinc-400 tabular-nums"> · {variablePctOfTotal.toFixed(0)}% do orçamento</span>
               </div>
             </CardHeader>
             <CardContent className="p-0">
