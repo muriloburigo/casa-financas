@@ -8,6 +8,7 @@ import {
   timestamp,
   date,
   varchar,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
@@ -99,4 +100,24 @@ export const insightsCache = pgTable("insights_cache", {
   payload: text("payload").notNull(), // JSON stringificado
   generatedAt: timestamp("generated_at").defaultNow(),
   generatedBy: text("generated_by"), // nome de quem gerou
+});
+
+// Teto mensal de gasto por categoria (+ "Investimentos" como meta) — um valor por ano/categoria
+export const budgetCaps = pgTable("budget_caps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  year: integer("year").notNull(),
+  category: text("category").notNull(), // uma de EXPENSE_CATEGORIES ou "Investimentos"
+  monthlyCap: decimal("monthly_cap", { precision: 10, scale: 2 }).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("budget_caps_year_category_unique").on(table.year, table.category),
+]);
+
+// Sugestão de orçamento gerada pela IA — um por ano, atualizado manualmente
+export const budgetSuggestionCache = pgTable("budget_suggestion_cache", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  year: integer("year").notNull().unique(),
+  payload: text("payload").notNull(), // JSON: números calculados + narrativa da IA
+  generatedAt: timestamp("generated_at").defaultNow(),
+  generatedBy: text("generated_by"),
 });

@@ -31,3 +31,23 @@ export const EXPENSE_CATEGORIES = [
   "Vestuário",
   "Outros",
 ];
+
+// Classificação de cada categoria em custo fixo/essencial vs. variável/estilo de vida,
+// usada pelo módulo de Orçamento para aplicar a divisão 50% fixo / 30% variável / 20%+ investimento.
+export const CATEGORY_BUCKET: Record<string, "fixed" | "variable"> = {
+  "Habitação": "fixed",
+  "Mobilidade": "fixed",
+  "Educação": "fixed",
+  "Saúde": "fixed",
+  "Serviços": "fixed",
+  "Impostos": "fixed",
+  "Alimentação": "variable",
+  "Lazer": "variable",
+  "Assinaturas": "variable",
+  "Vestuário": "variable",
+  "Outros": "variable",
+};
+
+// Meta de investimento tratada como uma 12ª "categoria" no módulo de Orçamento —
+// mesma tabela/fluxo dos tetos de despesa, mas com semântica invertida (ficar abaixo é o estado ruim).
+export const INVESTMENT_CATEGORY = "Investimentos";

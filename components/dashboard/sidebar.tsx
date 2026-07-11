@@ -11,12 +11,14 @@ import {
   LogOut,
   DollarSign,
   Sparkles,
+  Wallet,
 } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", shortLabel: "Início", icon: Home },
   { href: "/transacoes", label: "Transações", shortLabel: "Transações", icon: DollarSign },
   { href: "/faturas", label: "Faturas", shortLabel: "Faturas", icon: CreditCard },
+  { href: "/orcamento", label: "Orçamento", shortLabel: "Orçamento", icon: Wallet },
   { href: "/investimentos", label: "Investimentos", shortLabel: "Invest.", icon: TrendingUp },
   { href: "/insights", label: "Insights IA", shortLabel: "Insights", icon: Sparkles },
 ];
