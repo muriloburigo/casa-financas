@@ -6,7 +6,7 @@ import { MonthlyChart } from "@/components/dashboard/monthly-chart";
 import { ExpenseTable } from "@/components/dashboard/expense-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency, MONTHS } from "@/lib/utils";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, CreditCard } from "lucide-react";
 
 const BAR_COLORS = [
   "bg-emerald-500", "bg-blue-500", "bg-violet-500", "bg-amber-500",
@@ -14,7 +14,8 @@ const BAR_COLORS = [
   "bg-teal-500", "bg-pink-500",
 ];
 
-interface CategoryItem { category: string; amount: number; percentage: number; }
+interface CategoryEntryItem { description: string; amount: number; cardName?: string; }
+interface CategoryItem { category: string; amount: number; percentage: number; items: CategoryEntryItem[]; }
 
 interface DashboardData {
   monthlyData: Array<{ month: number; income: number; expenses: number }>;
@@ -36,6 +37,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year] = useState(2026);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/dashboard?month=${month}&year=${year}`)
@@ -62,7 +64,7 @@ export default function DashboardPage() {
         <h1 className="text-xl font-bold text-zinc-900">Dashboard</h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => { if (month > 1) setMonth(month - 1); }}
+            onClick={() => { if (month > 1) { setMonth(month - 1); setExpandedCategory(null); } }}
             disabled={month === 1}
             className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -70,7 +72,7 @@ export default function DashboardPage() {
           </button>
           <select
             value={month}
-            onChange={(e) => setMonth(parseInt(e.target.value))}
+            onChange={(e) => { setMonth(parseInt(e.target.value)); setExpandedCategory(null); }}
             className="text-sm border border-zinc-200 rounded-lg px-3 py-1.5 bg-white text-zinc-700"
           >
             {MONTHS.map((m, i) => (
@@ -78,7 +80,7 @@ export default function DashboardPage() {
             ))}
           </select>
           <button
-            onClick={() => { if (month < 12) setMonth(month + 1); }}
+            onClick={() => { if (month < 12) { setMonth(month + 1); setExpandedCategory(null); } }}
             disabled={month === 12}
             className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -111,27 +113,58 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {categories.map(({ category, amount, percentage }, i) => (
-                <div key={category}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm text-zinc-700 font-medium">{category}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-zinc-400 tabular-nums w-10 text-right">
-                        {percentage.toFixed(0)}%
-                      </span>
-                      <span className="text-sm font-semibold text-zinc-800 tabular-nums w-24 text-right">
-                        {formatCurrency(amount)}
-                      </span>
-                    </div>
+              {categories.map(({ category, amount, percentage, items }, i) => {
+                const isExpanded = expandedCategory === category;
+                return (
+                  <div key={category}>
+                    <button
+                      onClick={() => setExpandedCategory(isExpanded ? null : category)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="flex items-center gap-1.5 text-sm text-zinc-700 font-medium">
+                          <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 shrink-0 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
+                          {category}
+                        </span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-zinc-400 tabular-nums w-10 text-right">
+                            {percentage.toFixed(0)}%
+                          </span>
+                          <span className="text-sm font-semibold text-zinc-800 tabular-nums w-24 text-right">
+                            {formatCurrency(amount)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-500 ${BAR_COLORS[i % BAR_COLORS.length]}`}
+                          style={{ width: `${percentage}%` }}
+                        />
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="mt-2 ml-5 space-y-1 border-l border-zinc-100 pl-3">
+                        {items.length === 0 && (
+                          <p className="text-xs text-zinc-400 py-1">Nenhum lançamento detalhado</p>
+                        )}
+                        {items.map((item, j) => (
+                          <div key={j} className="flex items-center justify-between gap-3 py-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {item.cardName && <CreditCard className="h-3 w-3 text-zinc-300 shrink-0" />}
+                              <span className="text-xs text-zinc-600 truncate">{item.description}</span>
+                              {item.cardName && <span className="text-xs text-zinc-300 shrink-0">· {item.cardName}</span>}
+                            </div>
+                            <span className="text-xs font-medium text-zinc-700 tabular-nums shrink-0">
+                              {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-2 rounded-full transition-all duration-500 ${BAR_COLORS[i % BAR_COLORS.length]}`}
-                      style={{ width: `${percentage}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>

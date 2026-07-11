@@ -13,10 +13,11 @@ export async function GET(req: Request) {
 
   const total = breakdown.reduce((s, v) => s + v.amount, 0);
   const categories = breakdown
-    .map(({ category, amount }) => ({
+    .map(({ category, amount, items }) => ({
       category,
       amount,
       percentage: total > 0 ? (amount / total) * 100 : 0,
+      items,
     }))
     .sort((a, b) => b.amount - a.amount);
 
