@@ -249,9 +249,11 @@ export default function OrcamentoPage() {
   const totalVariableCap = variableCategories.reduce((s, c) => s + (caps[c] ?? 0), 0);
 
   const totalAlocado = EXPENSE_CATEGORIES.reduce((s, c) => s + (caps[c] ?? 0), 0);
-  const fixedPctOfTotal = totalAlocado > 0 ? (totalFixedCap / totalAlocado) * 100 : 0;
-  const variablePctOfTotal = totalAlocado > 0 ? (totalVariableCap / totalAlocado) * 100 : 0;
+  // % em relação à renda do mês — fixo + variável + investimento devem somar a renda
+  const fixedPctOfTotal = income > 0 ? (totalFixedCap / income) * 100 : 0;
+  const variablePctOfTotal = income > 0 ? (totalVariableCap / income) * 100 : 0;
   const investmentCap = caps[INVESTMENT_CATEGORY] ?? 0;
+  const investmentPctOfTotal = income > 0 ? (investmentCap / income) * 100 : 0;
   const investmentActual = actual[INVESTMENT_CATEGORY] ?? 0;
   const investmentShort = investmentCap > 0 && investmentActual < investmentCap;
   const saldoNaoAlocado = income - totalAlocado - investmentCap;
@@ -347,6 +349,7 @@ export default function OrcamentoPage() {
                     <span onClick={(e) => e.stopPropagation()}>
                       <CapCell value={investmentCap} onSave={(v) => saveCap(INVESTMENT_CATEGORY, v)} />
                     </span>
+                    <span className="text-xs text-zinc-400 tabular-nums">· {investmentPctOfTotal.toFixed(0)}% da renda</span>
                   </div>
                 </div>
                 <div className="h-2.5 bg-zinc-100 rounded-full overflow-hidden">
@@ -375,7 +378,7 @@ export default function OrcamentoPage() {
               </CardTitle>
               <div className="text-right shrink-0">
                 <span className="text-sm font-semibold text-zinc-800 tabular-nums">{formatCurrency(totalFixedCap)}</span>
-                <span className="text-xs text-zinc-400 tabular-nums"> · {fixedPctOfTotal.toFixed(0)}% do orçamento</span>
+                <span className="text-xs text-zinc-400 tabular-nums"> · {fixedPctOfTotal.toFixed(0)}% da renda</span>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -403,7 +406,7 @@ export default function OrcamentoPage() {
               </CardTitle>
               <div className="text-right shrink-0">
                 <span className="text-sm font-semibold text-zinc-800 tabular-nums">{formatCurrency(totalVariableCap)}</span>
-                <span className="text-xs text-zinc-400 tabular-nums"> · {variablePctOfTotal.toFixed(0)}% do orçamento</span>
+                <span className="text-xs text-zinc-400 tabular-nums"> · {variablePctOfTotal.toFixed(0)}% da renda</span>
               </div>
             </CardHeader>
             <CardContent className="p-0">
