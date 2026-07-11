@@ -245,6 +245,11 @@ export default function OrcamentoPage() {
   const fixedCategories = EXPENSE_CATEGORIES.filter((c) => CATEGORY_BUCKET[c] === "fixed");
   const variableCategories = EXPENSE_CATEGORIES.filter((c) => CATEGORY_BUCKET[c] === "variable");
 
+  const totalFixedCap = fixedCategories.reduce((s, c) => s + (caps[c] ?? 0), 0);
+  const totalFixedActual = fixedCategories.reduce((s, c) => s + (actual[c] ?? 0), 0);
+  const totalVariableCap = variableCategories.reduce((s, c) => s + (caps[c] ?? 0), 0);
+  const totalVariableActual = variableCategories.reduce((s, c) => s + (actual[c] ?? 0), 0);
+
   const totalAlocado = EXPENSE_CATEGORIES.reduce((s, c) => s + (caps[c] ?? 0), 0);
   const investmentCap = caps[INVESTMENT_CATEGORY] ?? 0;
   const investmentActual = actual[INVESTMENT_CATEGORY] ?? 0;
@@ -363,11 +368,17 @@ export default function OrcamentoPage() {
 
           {/* Custos fixos */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <HomeIcon className="h-4 w-4 text-zinc-400" />
                 Custos Fixos
               </CardTitle>
+              <div className="text-right shrink-0">
+                <span className={`text-sm font-semibold tabular-nums ${totalFixedCap > 0 && totalFixedActual > totalFixedCap ? "text-red-500" : "text-zinc-800"}`}>
+                  {formatCurrency(totalFixedActual)}
+                </span>
+                <span className="text-xs text-zinc-400 tabular-nums"> de {formatCurrency(totalFixedCap)}</span>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {fixedCategories.map((category) => (
@@ -387,11 +398,17 @@ export default function OrcamentoPage() {
 
           {/* Estilo de vida */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Palette className="h-4 w-4 text-zinc-400" />
                 Estilo de Vida
               </CardTitle>
+              <div className="text-right shrink-0">
+                <span className={`text-sm font-semibold tabular-nums ${totalVariableCap > 0 && totalVariableActual > totalVariableCap ? "text-red-500" : "text-zinc-800"}`}>
+                  {formatCurrency(totalVariableActual)}
+                </span>
+                <span className="text-xs text-zinc-400 tabular-nums"> de {formatCurrency(totalVariableCap)}</span>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               {variableCategories.map((category) => (
