@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ const SUGGESTIONS = [
 ];
 
 export function FloatingChat() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({ api: "/api/chat" });
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -29,6 +31,9 @@ export function FloatingChat() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // A página /chat já tem seu próprio campo de conversa — evita duplicar o input
+  if (pathname === "/chat") return null;
 
   return (
     <>
@@ -127,7 +132,7 @@ export function FloatingChat() {
               value={input}
               onChange={handleInputChange}
               placeholder="Pergunte ou registre um gasto..."
-              className="flex-1 text-xs h-9"
+              className="flex-1 h-9"
               disabled={isLoading}
               autoFocus={open}
             />

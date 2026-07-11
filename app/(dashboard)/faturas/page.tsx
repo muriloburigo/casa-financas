@@ -586,12 +586,12 @@ export default function FaturasPage() {
                               : <ChevronRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />}
                             <CreditCard className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                             <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-zinc-800">
+                              <p className="text-sm font-medium text-zinc-800 truncate">
                                 {inv.creditCardName}
-                              </span>
-                              <span className="text-xs text-zinc-400 ml-2">
+                              </p>
+                              <p className="text-xs text-zinc-400">
                                 {inv.transactionCount} transações
-                              </span>
+                              </p>
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${

@@ -70,7 +70,8 @@ function AmountCell({ entry, type, onSave }: {
         onChange={(e) => setValue(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }}
-        className="w-28 text-right text-sm font-semibold text-zinc-800 bg-zinc-50 border border-emerald-400 rounded px-2 py-0.5 tabular-nums focus:outline-none"
+        inputMode="decimal"
+        className="w-24 sm:w-28 text-right text-base sm:text-sm font-semibold text-zinc-800 bg-zinc-50 border border-emerald-400 rounded px-2 py-1 sm:py-0.5 tabular-nums focus:outline-none"
       />
     );
   }
@@ -79,10 +80,10 @@ function AmountCell({ entry, type, onSave }: {
     <button
       onClick={() => setEditing(true)}
       title="Clique para editar"
-      className="group/val flex items-center gap-1 tabular-nums text-sm font-semibold text-zinc-800 hover:text-emerald-600 transition-colors"
+      className="group/val flex items-center gap-1 tabular-nums text-sm font-semibold text-zinc-800 hover:text-emerald-600 transition-colors p-1.5 -m-1.5"
     >
       {formatCurrency(entry.amount)}
-      <Pencil className="h-3 w-3 opacity-0 group-hover/val:opacity-40 transition-opacity" />
+      <Pencil className="h-3 w-3 opacity-40 sm:opacity-0 sm:group-hover/val:opacity-40 transition-opacity" />
     </button>
   );
 }
@@ -327,7 +328,7 @@ export default function TransacoesPage() {
                     <button
                       onClick={() => toggleStatus(entry)}
                       title={entry.status === "paid" ? "Marcar como estimado" : "Marcar como pago"}
-                      className="shrink-0 transition-transform hover:scale-110"
+                      className="shrink-0 transition-transform hover:scale-110 p-1.5 -m-1.5"
                     >
                       {entry.status === "paid"
                         ? <CheckCircle2 className="h-5 w-5 text-emerald-500" />
@@ -345,8 +346,8 @@ export default function TransacoesPage() {
                             ? <ChevronDown className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
                             : <ChevronRight className="h-3.5 w-3.5 text-zinc-400 shrink-0" />}
                           <CreditCard className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
-                          <span className="text-sm font-medium text-zinc-800 truncate">{entry.description}</span>
-                          <span className="text-xs text-zinc-400 shrink-0">ver detalhes</span>
+                          <span className="flex-1 min-w-0 truncate text-sm font-medium text-zinc-800">{entry.description}</span>
+                          <span className="hidden sm:inline text-xs text-zinc-400 shrink-0">ver detalhes</span>
                         </button>
                       )
                       : (
@@ -363,7 +364,7 @@ export default function TransacoesPage() {
                       <button
                         onClick={() => toggleBenefit(entry)}
                         title="Marcar como benefício (iFood, vale)"
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-amber-400"
+                        className="shrink-0 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-amber-400 p-1.5 -m-1.5"
                       >
                         <Gift className="h-4 w-4" />
                       </button>
@@ -373,7 +374,7 @@ export default function TransacoesPage() {
                     <button
                       onClick={() => remove(entry)}
                       title="Remover"
-                      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-red-400"
+                      className="shrink-0 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-red-400 p-1.5 -m-1.5"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -410,13 +411,13 @@ export default function TransacoesPage() {
                   <button
                     onClick={() => toggleBenefit(entry)}
                     title="Remover de benefícios"
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="shrink-0 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1.5 -m-1.5"
                   >
                     <Gift className="h-4 w-4 text-amber-400 hover:text-zinc-400" />
                   </button>
                   <button
                     onClick={() => remove(entry)}
-                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-red-400"
+                    className="shrink-0 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-zinc-300 hover:text-red-400 p-1.5 -m-1.5"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -428,7 +429,7 @@ export default function TransacoesPage() {
           {/* Formulário de adição inline */}
           {adding && (
             <div className="px-5 py-4 border-t border-zinc-100 bg-zinc-50 space-y-3">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Input
                   ref={descRef}
                   value={newEntry.description}
@@ -441,11 +442,12 @@ export default function TransacoesPage() {
                   value={newEntry.amount}
                   onChange={(e) => setNewEntry((p) => ({ ...p, amount: e.target.value }))}
                   placeholder="Valor (R$)"
-                  className="w-32 text-right"
+                  inputMode="decimal"
+                  className="sm:w-32 text-right"
                   onKeyDown={(e) => { if (e.key === "Enter") addEntry(); }}
                 />
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-4">
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input
@@ -474,7 +476,7 @@ export default function TransacoesPage() {
                     </label>
                   )}
                 </div>
-                <Button size="sm" onClick={addEntry} disabled={saving || !newEntry.description.trim() || !newEntry.amount}>
+                <Button size="sm" className="w-full sm:w-auto" onClick={addEntry} disabled={saving || !newEntry.description.trim() || !newEntry.amount}>
                   {saving ? "Salvando..." : "Salvar"}
                 </Button>
               </div>
@@ -484,7 +486,7 @@ export default function TransacoesPage() {
       </Card>
 
       <p className="text-xs text-zinc-400 text-center">
-        Clique em ✓/🕐 para alternar status · Clique no valor para editar · Passe o mouse para remover
+        Toque em ✓/🕐 para alternar status · Toque no valor para editar · Use o ícone de lixeira para remover
       </p>
     </div>
   );
