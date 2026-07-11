@@ -8,6 +8,7 @@ import { formatCurrency, MONTHS, EXPENSE_CATEGORIES, CATEGORY_BUCKET, INVESTMENT
 import {
   ChevronLeft, ChevronRight, Wallet, Pencil, Sparkles,
   CheckCircle2, AlertTriangle, PiggyBank, Home as HomeIcon, Palette,
+  ChevronDown, CreditCard,
 } from "lucide-react";
 
 interface CategorySuggestion {
@@ -40,6 +41,31 @@ interface Narrative {
 interface SuggestionResult {
   suggestion: BudgetSuggestion;
   narrative: Narrative;
+}
+
+interface BudgetItem { description: string; amount: number; cardName?: string; }
+
+// Lista de lançamentos que compõem uma categoria — mesmo estilo usado no dashboard
+function ItemsList({ items }: { items: BudgetItem[] }) {
+  if (items.length === 0) {
+    return <p className="text-xs text-zinc-400 py-1">Nenhum lançamento neste mês</p>;
+  }
+  return (
+    <div className="space-y-1">
+      {items.map((item, i) => (
+        <div key={i} className="flex items-center justify-between gap-3 py-1">
+          <div className="flex items-center gap-1.5 min-w-0">
+            {item.cardName && <CreditCard className="h-3 w-3 text-zinc-300 shrink-0" />}
+            <span className="text-xs text-zinc-600 truncate">{item.description}</span>
+            {item.cardName && <span className="text-xs text-zinc-300 shrink-0">· {item.cardName}</span>}
+          </div>
+          <span className="text-xs font-medium text-zinc-700 tabular-nums shrink-0">
+            {formatCurrency(item.amount)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Célula de teto editável inline — mesmo padrão do AmountCell em transacoes/page.tsx
@@ -83,8 +109,9 @@ function CapCell({ value, onSave }: { value: number; onSave: (v: number) => void
   );
 }
 
-function CategoryRow({ category, cap, actual, onSaveCap }: {
-  category: string; cap: number; actual: number; onSaveCap: (v: number) => void;
+function CategoryRow({ category, cap, actual, items, expanded, onToggle, onSaveCap }: {
+  category: string; cap: number; actual: number; items: BudgetItem[];
+  expanded: boolean; onToggle: () => void; onSaveCap: (v: number) => void;
 }) {
   const hasCap = cap > 0;
   const pct = hasCap ? Math.min((actual / cap) * 100, 100) : 0;
@@ -92,23 +119,36 @@ function CategoryRow({ category, cap, actual, onSaveCap }: {
 
   return (
     <div className="px-5 py-3 border-b border-zinc-100 last:border-0">
-      <div className="flex items-center justify-between gap-3 mb-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-sm font-medium text-zinc-800 truncate">{category}</span>
-          {over && <Badge variant="over">Estourado</Badge>}
-          {!hasCap && <span className="text-xs text-zinc-400">sem teto definido</span>}
+      {/* Div clicável (não <button>) porque contém o CapCell, que já é um botão — botão dentro de botão é HTML inválido */}
+      <div onClick={onToggle} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggle(); }} className="w-full text-left cursor-pointer">
+        <div className="flex items-center justify-between gap-3 mb-1.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 shrink-0 transition-transform ${expanded ? "" : "-rotate-90"}`} />
+            <span className="text-sm font-medium text-zinc-800 truncate">{category}</span>
+            {over && <Badge variant="over">Estourado</Badge>}
+            {!hasCap && <span className="text-xs text-zinc-400">sem teto definido</span>}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-zinc-400 tabular-nums hidden sm:inline">{formatCurrency(actual)} de</span>
+            {/* CapCell é clicável por dentro; impede que o toggle do accordion capture o clique */}
+            <span onClick={(e) => e.stopPropagation()}>
+              <CapCell value={cap} onSave={onSaveCap} />
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs text-zinc-400 tabular-nums hidden sm:inline">{formatCurrency(actual)} de</span>
-          <CapCell value={cap} onSave={onSaveCap} />
+        <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
+          <div
+            className={`h-2 rounded-full transition-all duration-500 ${over ? "bg-red-500" : "bg-emerald-500"}`}
+            style={{ width: `${pct}%` }}
+          />
         </div>
       </div>
-      <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-        <div
-          className={`h-2 rounded-full transition-all duration-500 ${over ? "bg-red-500" : "bg-emerald-500"}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
+
+      {expanded && (
+        <div className="mt-2 ml-5 border-l border-zinc-100 pl-3">
+          <ItemsList items={items} />
+        </div>
+      )}
     </div>
   );
 }
@@ -119,8 +159,10 @@ export default function OrcamentoPage() {
 
   const [caps, setCaps] = useState<Record<string, number>>({});
   const [actual, setActual] = useState<Record<string, number>>({});
+  const [actualItems, setActualItems] = useState<Record<string, BudgetItem[]>>({});
   const [income, setIncome] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const [suggestionData, setSuggestionData] = useState<{ result: SuggestionResult | null; generatedAt: string | null; generatedBy: string | null }>({ result: null, generatedAt: null, generatedBy: null });
   const [generating, setGenerating] = useState(false);
@@ -136,10 +178,15 @@ export default function OrcamentoPage() {
     const capsMap: Record<string, number> = {};
     for (const c of budgetRes.caps ?? []) capsMap[c.category] = c.monthlyCap;
     const actualMap: Record<string, number> = {};
-    for (const a of budgetRes.actual ?? []) actualMap[a.category] = a.amount;
+    const itemsMap: Record<string, BudgetItem[]> = {};
+    for (const a of budgetRes.actual ?? []) {
+      actualMap[a.category] = a.amount;
+      itemsMap[a.category] = a.items ?? [];
+    }
 
     setCaps(capsMap);
     setActual(actualMap);
+    setActualItems(itemsMap);
     setIncome(dashboardRes.currentMonth?.totalIncome ?? 0);
     setLoading(false);
   }, [month, year]);
@@ -213,7 +260,7 @@ export default function OrcamentoPage() {
         <h1 className="text-xl font-bold text-zinc-900">Orçamento</h1>
         <div className="flex items-center gap-1">
           <button
-            onClick={() => { if (month > 1) setMonth(month - 1); }}
+            onClick={() => { if (month > 1) { setMonth(month - 1); setExpandedCategory(null); } }}
             disabled={month === 1}
             className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -221,7 +268,7 @@ export default function OrcamentoPage() {
           </button>
           <select
             value={month}
-            onChange={(e) => setMonth(parseInt(e.target.value))}
+            onChange={(e) => { setMonth(parseInt(e.target.value)); setExpandedCategory(null); }}
             className="text-sm border border-zinc-200 rounded-lg px-3 py-1.5 bg-white text-zinc-900"
           >
             {MONTHS.map((m, i) => (
@@ -229,7 +276,7 @@ export default function OrcamentoPage() {
             ))}
           </select>
           <button
-            onClick={() => { if (month < 12) setMonth(month + 1); }}
+            onClick={() => { if (month < 12) { setMonth(month + 1); setExpandedCategory(null); } }}
             disabled={month === 12}
             className="p-1.5 rounded-lg hover:bg-zinc-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
           >
@@ -269,30 +316,48 @@ export default function OrcamentoPage() {
           {/* Investimento — "pague-se primeiro" */}
           <Card className="border-l-4 border-l-blue-500">
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2">
-                  <PiggyBank className="h-4 w-4 text-blue-500" />
-                  <span className="text-sm font-semibold text-zinc-800">Invista antes de gastar</span>
-                  {investmentCap > 0 ? (
-                    <Badge variant={investmentShort ? "estimated" : "paid"}>
-                      {investmentShort ? "Abaixo da meta" : "Na meta"}
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-zinc-400">sem meta definida</span>
-                  )}
+              {/* Div clicável (não <button>) porque contém o CapCell, que já é um botão — botão dentro de botão é HTML inválido */}
+              <div
+                onClick={() => setExpandedCategory(expandedCategory === INVESTMENT_CATEGORY ? null : INVESTMENT_CATEGORY)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setExpandedCategory(expandedCategory === INVESTMENT_CATEGORY ? null : INVESTMENT_CATEGORY); }}
+                className="w-full text-left cursor-pointer"
+              >
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <ChevronDown className={`h-3.5 w-3.5 text-zinc-400 shrink-0 transition-transform ${expandedCategory === INVESTMENT_CATEGORY ? "" : "-rotate-90"}`} />
+                    <PiggyBank className="h-4 w-4 text-blue-500 shrink-0" />
+                    <span className="text-sm font-semibold text-zinc-800">Invista antes de gastar</span>
+                    {investmentCap > 0 ? (
+                      <Badge variant={investmentShort ? "estimated" : "paid"}>
+                        {investmentShort ? "Abaixo da meta" : "Na meta"}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-zinc-400">sem meta definida</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-zinc-400 tabular-nums hidden sm:inline">{formatCurrency(investmentActual)} de</span>
+                    <span onClick={(e) => e.stopPropagation()}>
+                      <CapCell value={investmentCap} onSave={(v) => saveCap(INVESTMENT_CATEGORY, v)} />
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-zinc-400 tabular-nums hidden sm:inline">{formatCurrency(investmentActual)} de</span>
-                  <CapCell value={investmentCap} onSave={(v) => saveCap(INVESTMENT_CATEGORY, v)} />
+                <div className="h-2.5 bg-zinc-100 rounded-full overflow-hidden">
+                  <div
+                    className={`h-2.5 rounded-full transition-all duration-500 ${investmentShort ? "bg-amber-400" : "bg-blue-500"}`}
+                    style={{ width: `${investmentCap > 0 ? Math.min((investmentActual / investmentCap) * 100, 100) : 0}%` }}
+                  />
                 </div>
-              </div>
-              <div className="h-2.5 bg-zinc-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-2.5 rounded-full transition-all duration-500 ${investmentShort ? "bg-amber-400" : "bg-blue-500"}`}
-                  style={{ width: `${investmentCap > 0 ? Math.min((investmentActual / investmentCap) * 100, 100) : 0}%` }}
-                />
               </div>
               <p className="text-xs text-zinc-400 mt-2">Separe o aporte do mês antes de definir o teto das outras categorias.</p>
+
+              {expandedCategory === INVESTMENT_CATEGORY && (
+                <div className="mt-2 ml-5 border-l border-zinc-100 pl-3">
+                  <ItemsList items={actualItems[INVESTMENT_CATEGORY] ?? []} />
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -311,6 +376,9 @@ export default function OrcamentoPage() {
                   category={category}
                   cap={caps[category] ?? 0}
                   actual={actual[category] ?? 0}
+                  items={actualItems[category] ?? []}
+                  expanded={expandedCategory === category}
+                  onToggle={() => setExpandedCategory(expandedCategory === category ? null : category)}
                   onSaveCap={(v) => saveCap(category, v)}
                 />
               ))}
@@ -332,6 +400,9 @@ export default function OrcamentoPage() {
                   category={category}
                   cap={caps[category] ?? 0}
                   actual={actual[category] ?? 0}
+                  items={actualItems[category] ?? []}
+                  expanded={expandedCategory === category}
+                  onToggle={() => setExpandedCategory(expandedCategory === category ? null : category)}
                   onSaveCap={(v) => saveCap(category, v)}
                 />
               ))}

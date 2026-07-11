@@ -22,6 +22,7 @@ interface Entry {
   isCreditCard?: boolean;
   creditCardName?: string | null;
   isBenefit?: boolean;
+  category?: string | null;
 }
 
 interface CCTransaction {
@@ -353,6 +354,9 @@ export default function TransacoesPage() {
                       : (
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-zinc-800 truncate">{entry.description}</p>
+                          {entry.category && (
+                            <Badge variant="estimated" className="mt-0.5">{entry.category}</Badge>
+                          )}
                         </div>
                       )}
 

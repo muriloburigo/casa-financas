@@ -11,10 +11,11 @@ const CATEGORY_PRIORITY: Record<string, number> = {
   "Saúde":       4,
   "Serviços":    5,
   "Impostos":    6,
-  "Lazer":       7,
-  "Assinaturas": 8,
-  "Alimentação": 9,
-  "Vestuário":   10,
+  "Esportes":    7,
+  "Lazer":       8,
+  "Assinaturas": 9,
+  "Alimentação": 10,
+  "Vestuário":   11,
   "Outros":      20,
 };
 
@@ -61,7 +62,10 @@ export async function GET(req: Request) {
     };
   });
 
-  const currentExpenses = expenses.filter((e) => e.month === month);
+  // Cartão agrega várias transações de categorias diferentes — não tem uma categoria única.
+  const currentExpenses = expenses
+    .filter((e) => e.month === month)
+    .map((e) => ({ ...e, category: e.isCreditCard ? null : inferCategory(e.description, rules) }));
   const currentIncomes = incomes.filter((i) => i.month === month);
   const currentInvestments = investments.filter((i) => i.month === month);
 

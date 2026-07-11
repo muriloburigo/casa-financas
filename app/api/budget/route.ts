@@ -22,7 +22,11 @@ export async function GET(req: Request) {
   const caps = capRows.map((r) => ({ category: r.category, monthlyCap: parseFloat(r.monthlyCap) }));
   const actual = [
     ...breakdown,
-    { category: INVESTMENT_CATEGORY, amount: investmentRows.reduce((s, r) => s + parseFloat(r.amount), 0) },
+    {
+      category: INVESTMENT_CATEGORY,
+      amount: investmentRows.reduce((s, r) => s + parseFloat(r.amount), 0),
+      items: investmentRows.map((r) => ({ description: r.description, amount: parseFloat(r.amount) })),
+    },
   ];
 
   return Response.json({ caps, actual });
